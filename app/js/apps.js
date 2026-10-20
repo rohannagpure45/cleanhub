@@ -4,38 +4,63 @@
   'use strict';
   const CH = root.CleanHub = root.CleanHub || {};
 
-  // Entries Tizen reports as visible that are still plumbing, not apps.
-  // Ids alone can't be trusted further than this: Prime Video, for one, ships
-  // under an org.tizen.* id.
-  const NOISE = [
-    /(^|[.\-_])(service|svc|daemon|agent|widget|plugin|helper|provider)s?$/i
-  ];
-
   // Our own id, so the launcher never lists itself.
   CH.selfIdPrefix = 'CleanHub01.';
 
-  function isNoise(info) {
-    if (!info || typeof info.id !== 'string' || !info.id) return true;
-    if (info.id.indexOf(CH.selfIdPrefix) === 0) return true;
-    if (info.show === false) return true;
-    const name = typeof info.name === 'string' ? info.name.trim() : '';
-    if (!name) return true;
-    for (let i = 0; i < NOISE.length; i++) {
-      if (NOISE[i].test(info.id)) return true;
+  // A Samsung store app id: ten letters or digits, a dot, then a name.
+  const STORE_ID = /^[A-Za-z0-9]{10}\.[A-Za-z0-9_-]+$/;
+
+  // getAppsInfo lists hundreds of entries on a real TV, and its `show` flag
+  // also passes plenty of plumbing. These ids are never apps: placeholder
+  // twins (org.tizen.primevideo-dummy), background companions
+  // (MCmYXNxgcu.DisneyPlusService, ZmmGjO6VKO.slingtvBgservice), Cobalt
+  // runtime copies, and Samsung utilities seen on 2022-2024 sets.
+  const NOISE_ID = [
+    /dummy/i,
+    /(service|svc|daemon|agent|widget|plugin|helper|provider)s?$/i,
+    /^com\.samsung\.tv\.cobalt-app-/i,
+    /^adplatform\./i,
+    /\.(cmsWebApp|emanual|WebAccountExtension|CastSettingsApp|PrivacyChoices|SmartTV|OTApp|SecurityCenter)$/
+  ];
+
+  // Names of plumbing that can still arrive with a store-style id.
+  const NOISE_NAME = /\b(service|worker|plugin|sdk|factory|daemon|dummy|e-?manual|ad ?player)\b|^ep[ -]/i;
+
+  function valid(info) {
+    return !!info && typeof info.id === 'string' && info.id !== '' &&
+      typeof info.name === 'string' && info.name.trim() !== '' &&
+      info.id.indexOf(CH.selfIdPrefix) !== 0;
+  }
+
+  function noiseId(id) {
+    for (let i = 0; i < NOISE_ID.length; i++) {
+      if (NOISE_ID[i].test(id)) return true;
     }
     return false;
   }
 
-  function findCatalog(info, catalog) {
+  // The catalog app an entry is, and how sure we are (lower is better):
+  // its position in the catalog's id list, then a name match on a store id,
+  // then a name match on anything else.
+  function recognise(info, catalog) {
+    for (let i = 0; i < catalog.length; i++) {
+      const at = catalog[i].ids ? catalog[i].ids.indexOf(info.id) : -1;
+      if (at !== -1) return { app: catalog[i], rank: at };
+    }
     const name = info.name.trim();
     for (let i = 0; i < catalog.length; i++) {
-      const c = catalog[i];
-      if (c.ids && c.ids.indexOf(info.id) !== -1) return c;
-    }
-    for (let i = 0; i < catalog.length; i++) {
-      if (catalog[i].match.test(name)) return catalog[i];
+      if (catalog[i].match.test(name)) {
+        return { app: catalog[i], rank: STORE_ID.test(info.id) ? 50 : 100 };
+      }
     }
     return null;
+  }
+
+  // Kept for tests and the "everything" view: is this entry plumbing?
+  function isNoise(info) {
+    if (!valid(info) || info.show === false) return true;
+    if (noiseId(info.id)) return true;
+    return !STORE_ID.test(info.id) || NOISE_NAME.test(info.name);
   }
 
   function monogram(name) {
@@ -45,36 +70,60 @@
     return (words[0][0] + words[1][0]).toUpperCase();
   }
 
-  // Stable fallback color from the app id, so unknown apps keep their color.
-  function hashColor(id) {
-    let h = 0;
-    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-    return 'hsl(' + (h % 360) + ', 42%, 34%)';
+  // Deep fills that keep light text readable, picked by app id so an unknown
+  // app keeps its colour across renames.
+  const FILLS = ['#56252A', '#154658', '#273F71', '#4C3A6B', '#164C62', '#633C58', '#514931', '#65462B'];
+
+  function fillFor(id) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < id.length; i++) {
+      h ^= id.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return FILLS[h % FILLS.length];
+  }
+
+  function entry(info, app) {
+    const name = info.name.trim();
+    return {
+      id: info.id,
+      name: app ? app.name : name,
+      key: app ? app.key : null,
+      icon: typeof info.iconPath === 'string' && info.iconPath ? info.iconPath : null,
+      mono: app ? app.mono : monogram(name),
+      bg: app ? app.bg : fillFor(info.id),
+      fg: app ? app.fg : '#F4F1EA'
+    };
   }
 
   // Returns [{ id, name, key, icon, mono, bg, fg }] sorted by name.
-  // When two installed entries map to the same catalog app, the first wins.
-  function normalize(infos, catalog) {
-    const list = [];
-    const seenIds = {};
-    const seenKeys = {};
-    (infos || []).forEach(function (info) {
-      if (isNoise(info) || seenIds[info.id]) return;
-      seenIds[info.id] = true;
-      const c = findCatalog(info, catalog || []);
-      if (c) {
-        if (seenKeys[c.key]) return;
-        seenKeys[c.key] = true;
+  // Recognised apps are kept even if the TV marks them hidden; when a TV lists
+  // one app twice, the better-ranked id wins. Unrecognised entries must look
+  // like store apps. With `everything`, only invalid entries are dropped (for
+  // finding an app the filters miss).
+  function normalize(infos, catalog, everything) {
+    const best = {}; // catalog key -> { info, app, rank }
+    const others = [];
+    const seen = {};
+    (Array.isArray(infos) ? infos : []).forEach(function (info) {
+      if (!valid(info) || seen[info.id]) return;
+      seen[info.id] = true;
+      if (everything) {
+        if (info.show !== false) others.push(entry(info, null));
+        return;
       }
-      list.push({
-        id: info.id,
-        name: c ? c.name : info.name.trim(),
-        key: c ? c.key : null,
-        icon: typeof info.iconPath === 'string' && info.iconPath ? info.iconPath : null,
-        mono: c ? c.mono : monogram(info.name.trim()),
-        bg: c ? c.bg : hashColor(info.id),
-        fg: c ? c.fg : '#FFFFFF'
-      });
+      if (noiseId(info.id)) return;
+      const hit = recognise(info, catalog || []);
+      if (hit && (hit.rank < 50 || info.show !== false)) {
+        const prev = best[hit.app.key];
+        if (!prev || hit.rank < prev.rank) best[hit.app.key] = { info: info, app: hit.app, rank: hit.rank };
+        return;
+      }
+      if (!isNoise(info)) others.push(entry(info, null));
+    });
+    const list = others;
+    Object.keys(best).forEach(function (key) {
+      list.push(entry(best[key].info, best[key].app));
     });
     list.sort(function (a, b) {
       return a.name.localeCompare(b.name);
@@ -133,6 +182,7 @@
     arrange: arrange,
     move: move,
     toggle: toggle,
-    monogram: monogram
+    monogram: monogram,
+    fillFor: fillFor
   };
 })(typeof window !== 'undefined' ? window : globalThis);

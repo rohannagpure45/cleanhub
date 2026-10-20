@@ -27,19 +27,27 @@ export function memoryStorage(initial = {}) {
   };
 }
 
-// A plausible slice of what getAppsInfo returns on a Samsung TV.
+// A slice of what getAppsInfo returns on a 2022 Samsung TV, including the
+// noise real sets report (ids from CleanFrame and arn0-tv device logs).
 export const TV_APPS = [
-  { id: 'RN1MCdNq8t.Netflix', name: 'Netflix', show: true, iconPath: '/opt/usr/apps/RN1MCdNq8t/shared/res/icon.png' },
+  { id: 'org.tizen.netflix-app', name: 'Netflix', show: true, iconPath: '/opt/usr/globalapps/org.tizen.netflix-app/shared/res/icon.png' },
+  { id: 'com.samsung.tv.cobalt-yt', name: 'YouTube', show: true },
   { id: '9Ur5IzDKqV.TizenYouTube', name: 'YouTube', show: true, iconPath: '' },
-  { id: 'org.tizen.ignition', name: 'Prime Video', show: true },
+  { id: 'org.tizen.primevideo', name: 'Prime Video', show: true },
+  { id: 'org.tizen.primevideo-dummy', name: 'Prime Video', show: true },
   { id: 'MCmYXNxgcu.DisneyPlus', name: 'Disney+', show: true },
-  { id: 'cj37Ni3qXM.HBONow', name: 'Max', show: true },
+  { id: 'MCmYXNxgcu.DisneyPlusService', name: 'Disney+', show: true },
+  { id: '5b8c3eb16b.BeamCTVDev', name: 'Max', show: false },
   { id: 'com.samsung.tv.store', name: 'Apps', show: true },
   { id: 'com.samsung.tv.csfs', name: 'Smart Hub', show: false },
   { id: 'org.tizen.example.voice-service', name: 'Voice', show: true },
-  { id: 'abc.Weather', name: 'Weather Now', show: true },
+  { id: 'adplatform.ADPlayer', name: 'ADPlayer', show: true },
+  { id: '25emanual3.emanual', name: 'e-Manual', show: true },
+  { id: 'ep0000test.EpHelper', name: 'EP Helper', show: true },
+  { id: 'abc123defg.WeatherNow', name: 'Weather Now', show: true },
+  { id: 'hiddenapp1.Hidden', name: 'Hidden Thing', show: false },
   { id: '', name: 'Broken', show: true },
-  { id: 'nameless.App', name: '   ', show: true },
+  { id: 'nameless01.App', name: '   ', show: true },
   { id: 'CleanHub01.Launcher', name: 'Clean Hub', show: true },
-  { id: 'dup.YouTube', name: 'YouTube', show: true }
+  { id: 'abc123defg.WeatherNow', name: 'Weather Now', show: true }
 ];

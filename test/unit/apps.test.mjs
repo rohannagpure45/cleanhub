@@ -5,39 +5,72 @@ import { load, TV_APPS } from './load.mjs';
 const CH = load();
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
-test('normalize drops hidden, nameless, service, duplicate and self entries', () => {
+test('normalize keeps real apps and drops twins, companions, utilities and junk', () => {
   const ids = plain(CH.apps.normalize(TV_APPS, CH.catalog).map((e) => e.id));
   assert.deepEqual(ids.sort(), [
+    '5b8c3eb16b.BeamCTVDev',
     '9Ur5IzDKqV.TizenYouTube',
     'MCmYXNxgcu.DisneyPlus',
-    'RN1MCdNq8t.Netflix',
-    'abc.Weather',
-    'cj37Ni3qXM.HBONow',
-    'com.samsung.tv.store',
-    'org.tizen.ignition'
+    'abc123defg.WeatherNow',
+    'org.tizen.netflix-app',
+    'org.tizen.primevideo'
   ]);
 });
 
-test('normalize keeps Prime Video despite its org.tizen id', () => {
-  const prime = CH.apps.normalize(TV_APPS, CH.catalog).find((e) => e.key === 'prime');
-  assert.equal(prime.id, 'org.tizen.ignition');
-  assert.equal(prime.name, 'Prime Video');
+test('when an app is listed twice, the preferred id wins whatever the order', () => {
+  const twins = [
+    { id: 'com.samsung.tv.cobalt-yt', name: 'YouTube', show: true },
+    { id: '9Ur5IzDKqV.TizenYouTube', name: 'YouTube', show: true }
+  ];
+  for (const list of [twins, [...twins].reverse()]) {
+    const out = CH.apps.normalize(list, CH.catalog);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].id, '9Ur5IzDKqV.TizenYouTube');
+  }
+  // With only the Cobalt build installed, that one is used.
+  assert.equal(CH.apps.normalize([twins[0]], CH.catalog)[0].key, 'youtube');
 });
 
-test('normalize uses catalog names and colors, and monograms for unknown apps', () => {
+test('a recognised id is kept even when the TV marks it hidden; a name match is not', () => {
+  const list = CH.apps.normalize([
+    { id: '5b8c3eb16b.BeamCTVDev', name: 'Max', show: false },
+    { id: 'zzzzzzzzzz.Netflix', name: 'Netflix', show: false }
+  ], CH.catalog);
+  assert.deepEqual(plain(list.map((e) => e.key)), ['max']);
+});
+
+test('unknown apps need a store-style id and a non-plumbing name', () => {
+  const list = CH.apps.normalize([
+    { id: 'abcdefghij.Radio', name: 'Radio Garden', show: true },
+    { id: 'com.samsung.tv.gallery', name: 'Gallery', show: true },
+    { id: 'abcdefghij.Worker', name: 'Sync worker', show: true },
+    { id: 'ep12345678.Ep', name: 'EP Player', show: true }
+  ], CH.catalog);
+  assert.deepEqual(plain(list.map((e) => e.name)), ['Radio Garden']);
+});
+
+test('the everything view keeps visible plumbing but still drops junk and itself', () => {
+  const names = plain(CH.apps.normalize(TV_APPS, CH.catalog, true).map((e) => e.name));
+  assert.ok(names.includes('Apps') && names.includes('ADPlayer') && names.includes('e-Manual'));
+  assert.ok(!names.includes('Smart Hub') && !names.includes('Clean Hub') && !names.includes('Broken'));
+  assert.equal(names.filter((n) => n === 'Weather Now').length, 1);
+});
+
+test('normalize uses catalog names and colours, and monograms for unknown apps', () => {
   const list = CH.apps.normalize(TV_APPS, CH.catalog);
-  const max = list.find((e) => e.id === 'cj37Ni3qXM.HBONow');
+  const max = list.find((e) => e.id === '5b8c3eb16b.BeamCTVDev');
   assert.equal(max.key, 'max');
   assert.equal(max.bg, '#002BE7');
-  const weather = list.find((e) => e.id === 'abc.Weather');
+  const weather = list.find((e) => e.id === 'abc123defg.WeatherNow');
   assert.equal(weather.key, null);
   assert.equal(weather.mono, 'WN');
-  assert.match(weather.bg, /^hsl\(/);
+  assert.equal(weather.bg, CH.apps.fillFor('abc123defg.WeatherNow'));
+  assert.equal(CH.apps.fillFor('abc123defg.WeatherNow'), CH.apps.fillFor('abc123defg.WeatherNow'));
 });
 
 test('normalize keeps a usable icon path and ignores empty ones', () => {
   const list = CH.apps.normalize(TV_APPS, CH.catalog);
-  assert.equal(list.find((e) => e.key === 'netflix').icon, '/opt/usr/apps/RN1MCdNq8t/shared/res/icon.png');
+  assert.equal(list.find((e) => e.key === 'netflix').icon, '/opt/usr/globalapps/org.tizen.netflix-app/shared/res/icon.png');
   assert.equal(list.find((e) => e.key === 'youtube').icon, null);
 });
 
@@ -50,29 +83,29 @@ test('normalize sorts by name and tolerates junk input', () => {
 
 test('YouTube TV and YouTube Kids are not mistaken for YouTube', () => {
   const list = CH.apps.normalize([
-    { id: 'a.YTV', name: 'YouTube TV', show: true },
-    { id: 'b.Kids', name: 'YouTube Kids', show: true },
-    { id: 'c.YT', name: 'YouTube', show: true }
+    { id: 'aaaaaaaaaa.YTV', name: 'YouTube TV', show: true },
+    { id: 'bbbbbbbbbb.Kids', name: 'YouTube Kids', show: true },
+    { id: 'cccccccccc.YT', name: 'YouTube', show: true }
   ], CH.catalog);
   const keys = Object.fromEntries(list.map((e) => [e.id, e.key]));
-  assert.deepEqual(keys, { 'a.YTV': 'youtubetv', 'b.Kids': 'kids', 'c.YT': 'youtube' });
+  assert.deepEqual(keys, { 'aaaaaaaaaa.YTV': 'youtubetv', 'bbbbbbbbbb.Kids': 'kids', 'cccccccccc.YT': 'youtube' });
 });
 
 test('pickDefault follows the preferred order and limit', () => {
   const list = CH.apps.normalize(TV_APPS, CH.catalog);
   assert.deepEqual(plain(CH.apps.pickDefault(list, CH.defaultOrder, 3)),
-    ['RN1MCdNq8t.Netflix', '9Ur5IzDKqV.TizenYouTube', 'org.tizen.ignition']);
+    ['org.tizen.netflix-app', '9Ur5IzDKqV.TizenYouTube', 'org.tizen.primevideo']);
 });
 
 test('pickDefault falls back to the first apps when none are recognised', () => {
-  const list = CH.apps.normalize([{ id: 'x.A', name: 'Alpha', show: true }, { id: 'x.B', name: 'Beta', show: true }], CH.catalog);
-  assert.deepEqual(plain(CH.apps.pickDefault(list, CH.defaultOrder, 8)), ['x.A', 'x.B']);
+  const list = CH.apps.normalize([{ id: 'xxxxxxxxxx.A', name: 'Alpha', show: true }, { id: 'xxxxxxxxxx.B', name: 'Beta', show: true }], CH.catalog);
+  assert.deepEqual(plain(CH.apps.pickDefault(list, CH.defaultOrder, 8)), ['xxxxxxxxxx.A', 'xxxxxxxxxx.B']);
 });
 
 test('arrange honours saved order and skips apps no longer installed', () => {
   const list = CH.apps.normalize(TV_APPS, CH.catalog);
-  const out = CH.apps.arrange(list, ['abc.Weather', 'gone.App', 'RN1MCdNq8t.Netflix'], CH.defaultOrder, 8);
-  assert.deepEqual(plain(out.map((e) => e.id)), ['abc.Weather', 'RN1MCdNq8t.Netflix']);
+  const out = CH.apps.arrange(list, ['abc123defg.WeatherNow', 'gone.App', 'org.tizen.netflix-app'], CH.defaultOrder, 8);
+  assert.deepEqual(plain(out.map((e) => e.id)), ['abc123defg.WeatherNow', 'org.tizen.netflix-app']);
 });
 
 test('arrange with an empty saved list shows nothing (viewer removed everything)', () => {

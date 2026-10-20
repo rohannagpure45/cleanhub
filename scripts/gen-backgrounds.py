@@ -5,6 +5,8 @@ blurs live. For each theme it writes:
   app/img/bg-<id>-blur.jpg  the same image heavily blurred, used for fake glass
   app/img/thumb-<id>.jpg    240x135 swatch for the settings screen
 
+and the 512x512 app icon (app/icon.png) shown in Samsung's app bar.
+
 Everything is procedural (soft colour fields plus fine grain), so there are
 no photo licences to track. Run: python3 scripts/gen-backgrounds.py
 """
@@ -76,6 +78,24 @@ def grain(img, amount, seed):
     return ImageChops.add(img, noise, 1.0, -128)
 
 
+def icon():
+    """Three bars on the Dusk field, the top one lit: a list with focus."""
+    size = 512
+    img = Image.open(OUT / "bg-dusk-blur.jpg").crop((240, 0, 240 + 1080, 1080)).resize((size, size), Image.LANCZOS)
+    shade = Image.new("RGB", (size, size), (10, 12, 30))
+    img = Image.blend(img, shade, 0.25)
+    draw = ImageDraw.Draw(img, "RGBA")
+    left, height, gap = 132, 56, 34
+    top = (size - (3 * height + 2 * gap)) // 2
+    bars = [(288, (255, 255, 255, 255)), (224, (255, 255, 255, 120)), (160, (255, 255, 255, 120))]
+    for i, (width, colour) in enumerate(bars):
+        y = top + i * (height + gap)
+        draw.rounded_rectangle((left, y, left + width, y + height), radius=height // 2, fill=colour)
+    draw.rounded_rectangle((left - 40, top + 8, left - 22, top + height - 8), radius=9, fill=(242, 180, 156, 255))
+    img.save(OUT.parent / "icon.png", optimize=True)
+    print("icon: wrote app/icon.png")
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for i, (name, (base, blobs, amount)) in enumerate(THEMES.items()):
@@ -86,6 +106,7 @@ def main():
         blur.save(OUT / f"bg-{name}-blur.jpg", quality=80, optimize=True, progressive=True)
         img.resize((240, 135), Image.LANCZOS).save(OUT / f"thumb-{name}.jpg", quality=85)
         print(f"{name}: wrote bg, blur and thumb")
+    icon()
 
 
 if __name__ == "__main__":

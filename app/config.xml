@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tizen widget manifest for Clean Hub.
+  - Package id is exactly 10 letters/digits; the app id is <package>.<name>.
+    apps.js (selfIdPrefix) and scripts/tv.py rely on these values.
+  - required_version must not exceed the TV's Tizen version (6.5 on 2022 sets).
+  - Only public-level privileges, so a plain Tizen developer certificate can
+    sign it: application.launch opens other apps; application.info covers
+    getAppsInfo's extra fields.
+  - No <access> element and no internet privilege: the app runs fully offline.
+-->
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://cleanhub.local/launcher" version="0.1.0" viewmodes="maximized">
+  <tizen:application id="CleanHub01.Launcher" package="CleanHub01" required_version="3.0"/>
+  <tizen:profile name="tv-samsung"/>
+  <content src="index.html"/>
+  <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+  <icon src="icon.png"/>
+  <name>Clean Hub</name>
+  <tizen:privilege name="http://tizen.org/privilege/application.info"/>
+  <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+  <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
+                 encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>

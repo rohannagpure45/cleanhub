@@ -7,10 +7,13 @@
 
   const state = {
     settings: null,
-    all: [], // every launchable app on the TV, normalised
+    raw: [], // the TV's app list as last read (plain objects)
+    all: [], // apps on the TV after filtering, normalised
     home: [], // apps shown on the home screen, in order
-    loaded: false,
+    loaded: false, // some app list (cached or live) is showing
+    fresh: false, // the live list from the TV has arrived
     error: null,
+    showEverything: false, // apps sheet lists every entry the TV reports
     screen: 'home', // 'home' | 'settings' | 'apps'
     homeIndex: 0,
     settingsIndex: 0,
@@ -20,11 +23,32 @@
     confirmReset: false
   };
 
+  const APPS_CACHE = 'cleanhub.apps';
+
   function storage() {
     try {
       return root.localStorage;
     } catch (e) {
       return null;
+    }
+  }
+
+  // The last app list, so Home can draw at once while the TV (slowly)
+  // produces a fresh one.
+  function readCache() {
+    try {
+      const list = JSON.parse(storage().getItem(APPS_CACHE));
+      return Array.isArray(list) ? list : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeCache(raw) {
+    try {
+      storage().setItem(APPS_CACHE, JSON.stringify(raw));
+    } catch (e) {
+      // Only a speed-up; nothing to tell the viewer.
     }
   }
 
@@ -44,8 +68,21 @@
     return Array.isArray(state.settings.apps) ? state.settings.apps.slice() : homeIds();
   }
 
+  // Filtered apps, plus any entry the filters hide that the viewer put on
+  // Home on purpose (from "Show everything the TV lists").
+  function homePool() {
+    const ids = Array.isArray(state.settings.apps) ? state.settings.apps : [];
+    const known = {};
+    state.all.forEach(function (e) { known[e.id] = true; });
+    const wanted = ids.filter(function (id) { return !known[id]; });
+    if (!wanted.length) return state.all;
+    return state.all.concat(CH.apps.normalize(state.raw, CH.catalog, true).filter(function (e) {
+      return wanted.indexOf(e.id) !== -1;
+    }));
+  }
+
   function arrangeHome() {
-    state.home = CH.apps.arrange(state.all, state.settings.apps, CH.defaultOrder, CH.defaultLimit);
+    state.home = CH.apps.arrange(homePool(), state.settings.apps, CH.defaultOrder, CH.defaultLimit);
   }
 
   // ---- Home ----------------------------------------------------------------
@@ -185,25 +222,35 @@
   // ---- Apps on Home ------------------------------------------------------------
 
   // Chosen apps first, in their order, then everything else by name.
+  // `showEverything` adds what the filters hide, for apps they get wrong.
   function appRows() {
     const ids = chosenIds();
+    const pool = homePool().slice();
+    if (state.showEverything) {
+      const known = {};
+      pool.forEach(function (e) { known[e.id] = true; });
+      CH.apps.normalize(state.raw, CH.catalog, true).forEach(function (e) {
+        if (!known[e.id]) pool.push(e);
+      });
+    }
     const byId = {};
-    state.all.forEach(function (e) { byId[e.id] = e; });
+    pool.forEach(function (e) { byId[e.id] = e; });
     const rows = [];
     let order = 0;
     ids.forEach(function (id) {
       if (byId[id]) rows.push({ entry: byId[id], on: true, order: order++ });
     });
-    state.all.forEach(function (e) {
+    pool.sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (e) {
       if (ids.indexOf(e.id) === -1) rows.push({ entry: e, on: false, order: -1 });
     });
     return rows;
   }
 
+  // The apps sheet's focusable rows are the apps plus one toggle at the end.
   function renderApps() {
     const rows = appRows();
-    state.appsIndex = Math.max(0, Math.min(rows.length - 1, state.appsIndex));
-    CH.ui.renderAppsSheet(rows, state.moving, state.appsIndex);
+    state.appsIndex = Math.max(0, Math.min(rows.length, state.appsIndex));
+    CH.ui.renderAppsSheet(rows, state.moving, state.appsIndex, state.showEverything);
     CH.ui.focusSheet(state.appsIndex, true);
     return rows;
   }
@@ -212,6 +259,7 @@
     state.screen = 'apps';
     state.appsIndex = 0;
     state.moving = -1;
+    state.showEverything = false;
     renderApps();
     refreshApps();
   }
@@ -220,7 +268,7 @@
   // the end, so an app that is updated or briefly missing keeps its place.
   function setChosen(visibleIds) {
     const installed = {};
-    state.all.forEach(function (e) { installed[e.id] = true; });
+    state.raw.forEach(function (info) { if (info && info.id) installed[info.id] = true; });
     const missing = chosenIds().filter(function (id) { return !installed[id]; });
     const next = Object.assign({}, state.settings, { apps: visibleIds.concat(missing) });
     state.settings = CH.store.sanitize(next);
@@ -266,7 +314,7 @@
       return;
     }
     if (key === 'up' || key === 'down') {
-      const next = CH.focus.step(state.appsIndex, rows.length, key === 'down' ? 1 : -1);
+      const next = CH.focus.step(state.appsIndex, rows.length + 1, key === 'down' ? 1 : -1);
       if (next !== state.appsIndex) {
         state.appsIndex = next;
         CH.ui.focusSheet(next);
@@ -274,7 +322,14 @@
       }
       return;
     }
-    if (!row) return;
+    if (!row) {
+      if (key === 'ok') {
+        state.showEverything = !state.showEverything;
+        state.appsIndex = appRows().length; // stay on the switch, which moves as rows come and go
+        renderApps();
+      }
+      return;
+    }
     if (key === 'ok' && !row.on) {
       const ids = visibleChosen(rows).concat([row.entry.id]);
       setChosen(ids);
@@ -292,16 +347,23 @@
 
   // ---- Data ------------------------------------------------------------------
 
+  function setRaw(raw) {
+    state.raw = raw;
+    state.all = CH.apps.normalize(raw, CH.catalog);
+  }
+
   function refreshApps() {
     return CH.platform.listApps().then(function (infos) {
       state.error = null;
-      state.all = CH.apps.normalize(infos, CH.catalog);
+      setRaw(infos);
+      writeCache(infos);
     }, function (err) {
-      state.error = err;
-      state.all = [];
+      // Keep showing a cached list if there is one; say so only if not.
+      state.error = state.raw.length ? null : err;
     }).then(function () {
       const keepId = focusedHomeId();
       state.loaded = true;
+      state.fresh = true;
       arrangeHome();
       if (state.screen === 'home') {
         renderHome(keepId);
@@ -331,6 +393,8 @@
     const key = CH.platform.keyName(event);
     if (!key) return;
     event.preventDefault();
+    // Holding OK or Back must not launch twice or skip screens; arrows may repeat.
+    if (event.repeat && (key === 'ok' || key === 'back')) return;
     if (state.screen === 'home') onHomeKey(key);
     else if (state.screen === 'settings') onSettingsKey(key);
     else if (state.screen === 'apps') onAppsKey(key);
@@ -349,10 +413,17 @@
     state.settings = s ? CH.store.load(s) : CH.store.defaults();
     CH.ui.init();
     CH.ui.applyLook(state.settings);
+    const cached = s ? readCache() : null;
+    if (cached) {
+      setRaw(cached);
+      state.loaded = true;
+      arrangeHome();
+    }
     renderHome(null);
     doc.addEventListener('keydown', onKey);
     doc.addEventListener('visibilitychange', onVisibility);
-    refreshApps();
+    // Let the first frame and key presses through before the slow app list.
+    root.setTimeout(refreshApps, cached ? 600 : 0);
   }
 
   CH.main = { state: state, start: start, version: VERSION };

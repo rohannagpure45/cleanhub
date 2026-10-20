@@ -282,19 +282,6 @@
     return fillHint(h('div', 'sheet-hint'), parts);
   }
 
-  function appsHint(rows, moving, focusIndex) {
-    const focused = rows[focusIndex];
-    if (moving !== -1) return [['▲ ▼', 'Move'], ['OK', 'Done'], ['Back', 'Cancel']];
-    if (focused && focused.on) return [['OK', 'Move'], ['◀', 'Remove'], ['Back', 'Settings']];
-    return [['OK', 'Add to Home'], ['Back', 'Settings']];
-  }
-
-  // Focus moved in the apps sheet: only the hint line depends on it.
-  function updateAppsHint(rows, moving, focusIndex) {
-    const el = sheet.el.querySelector('.sheet-hint');
-    if (el) fillHint(el, appsHint(rows, moving, focusIndex));
-  }
-
   function sheetFrame(title, sub) {
     const el = sheet.el;
     el.innerHTML = '';
@@ -369,14 +356,29 @@
     alignGlass(sheet.el);
   }
 
+  function appsHint(rows, moving, focusIndex) {
+    const focused = rows[focusIndex];
+    if (moving !== -1) return [['▲ ▼', 'Move'], ['OK', 'Done'], ['Back', 'Cancel']];
+    if (!focused) return [['OK', 'Switch'], ['Back', 'Settings']];
+    if (focused.on) return [['OK', 'Move'], ['◀', 'Remove'], ['Back', 'Settings']];
+    return [['OK', 'Add to Home'], ['Back', 'Settings']];
+  }
+
+  // Focus moved in the apps sheet: only the hint line depends on it.
+  function updateAppsHint(rows, moving, focusIndex) {
+    const el = sheet.el.querySelector('.sheet-hint');
+    if (el) fillHint(el, appsHint(rows, moving, focusIndex));
+  }
+
   // rows: [{ entry, on, order }]; moving: index of the row being moved, or -1.
-  function renderAppsSheet(rows, moving, focusIndex) {
+  // The last focusable row switches between apps only and every TV entry.
+  function renderAppsSheet(rows, moving, focusIndex, everything) {
     const onCount = rows.filter(function (r) { return r.on; }).length;
     const inner = sheetFrame('Apps on Home', onCount + ' on Home');
     let lastOn = null;
     rows.forEach(function (r, i) {
       if (lastOn !== r.on) {
-        sheet.track.appendChild(h('div', 'sheet-section', r.on ? 'On Home' : 'Not on Home'));
+        sheet.track.appendChild(h('div', 'sheet-section', r.on ? 'On Home' : (everything ? 'Everything the TV lists' : 'Not on Home')));
         lastOn = r.on;
       }
       const row = h('div', 'sheet-row' + (r.on ? ' is-on' : '') + (i === moving ? ' is-moving' : ''));
@@ -392,6 +394,9 @@
     if (!rows.length) {
       sheet.track.appendChild(h('div', 'empty sheet-section', 'No apps found on this TV.'));
     }
+    sheet.track.appendChild(h('div', 'sheet-section', 'Missing an app?'));
+    const toggle = actionRow('everything', everything ? 'Show only recognised apps' : 'Show everything the TV lists', '');
+    addRow(toggle);
     inner.appendChild(hint(appsHint(rows, moving, focusIndex)));
     alignGlass(sheet.el);
   }

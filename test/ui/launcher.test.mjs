@@ -32,7 +32,7 @@ beforeEach(async () => {
 
 async function open(query = '') {
   await page.goto(base + query);
-  await page.waitForFunction(() => window.CleanHub.main.state.loaded);
+  await page.waitForFunction(() => window.CleanHub.main.state.fresh);
 }
 
 const press = async (key, times = 1) => {
@@ -71,13 +71,13 @@ test('arrows move focus, clamp at the ends, and OK launches the focused app', as
   assert.equal((await state()).homeIndex, 2);
   await press('Enter');
   await page.waitForFunction(() => window.__mock.launches.length === 1);
-  assert.deepEqual((await state()).launches, ['org.tizen.ignition']);
+  assert.deepEqual((await state()).launches, ['org.tizen.primevideo']);
   await press('ArrowDown', 20);
   assert.equal((await state()).homeIndex, 8, 'stops on Settings');
 });
 
 test('a failed launch tells the viewer', async () => {
-  await open('?fail=RN1MCdNq8t.Netflix');
+  await open('?fail=org.tizen.netflix-app');
   await press('Enter');
   await page.waitForFunction(() => document.getElementById('toast').classList.contains('is-shown'));
   assert.equal(await toastText(), 'Couldn’t open Netflix');
@@ -105,7 +105,7 @@ test('settings change the layout, and the choice survives a restart', async () =
   await press('Escape');
   assert.equal((await state()).screen, 'home');
   await page.reload();
-  await page.waitForFunction(() => window.CleanHub.main.state.loaded);
+  await page.waitForFunction(() => window.CleanHub.main.state.fresh);
   assert.equal(await page.getAttribute('html', 'data-layout'), 'dock');
   // Dock moves with left/right and shows the focused name.
   assert.equal(await page.$eval('.dock-label', (e) => e.textContent), 'Netflix');
@@ -158,7 +158,10 @@ test('apps on home: add, move and remove, saved across restarts', async () => {
   const all = await labels();
   assert.deepEqual(all.slice(0, 8), ['Netflix', 'YouTube', 'Prime Video', 'Disney+', 'Max', 'Plex', 'Tubi', 'Spotify']);
   assert.ok(all.includes('Weather Now'), 'unrecognised apps can be added');
-  assert.ok(!all.includes('Smart Hub') && !all.includes('Clean Hub') && !all.includes('Voice'));
+  for (const junk of ['Smart Hub', 'Clean Hub', 'Voice', 'ADPlayer', 'e-Manual', 'Apps']) {
+    assert.ok(!all.includes(junk), junk + ' should be filtered out');
+  }
+  assert.equal(all.filter((n) => n === 'YouTube').length, 1, 'twins collapse to one');
 
   // Add Weather Now (it lands at the end of the On Home group).
   await press('ArrowDown', all.indexOf('Weather Now'));
@@ -177,7 +180,7 @@ test('apps on home: add, move and remove, saved across restarts', async () => {
   await press('Escape');
   assert.deepEqual(await homeNames(), ['Weather Now', 'Netflix', 'Prime Video', 'Disney+', 'Max', 'Plex', 'Tubi', 'Spotify']);
   await page.reload();
-  await page.waitForFunction(() => window.CleanHub.main.state.loaded);
+  await page.waitForFunction(() => window.CleanHub.main.state.fresh);
   assert.deepEqual(await homeNames(), ['Weather Now', 'Netflix', 'Prime Video', 'Disney+', 'Max', 'Plex', 'Tubi', 'Spotify']);
   assert.deepEqual(errors, []);
 });
@@ -209,7 +212,7 @@ test('apps that are uninstalled disappear, and come back in place if reinstalled
 test('an app installed while away shows up in the picker', async () => {
   await open();
   await page.evaluate(() => {
-    window.__mock.apps = window.__mock.apps.concat([{ id: 'zzzzzzzzzz.Crunchyroll', name: 'Crunchyroll' }]);
+    window.__mock.apps = window.__mock.apps.concat([{ id: 'zzzzzzzzz1.Crunchyroll', name: 'Crunchyroll' }]);
     window.__mock.returnFromApp();
   });
   await press('ArrowDown', 8);
@@ -264,4 +267,48 @@ test('clock follows the 12/24-hour and off settings', async () => {
   assert.deepEqual(fmt[1], { time: '21:05', ampm: '', date: 'Tuesday, October 20' });
   assert.equal(fmt[2].time, '12:07');
   assert.equal(fmt[2].ampm, 'AM');
+});
+
+test('the apps sheet can show everything the TV lists, to rescue a filtered app', async () => {
+  await open();
+  await press('ArrowDown', 8);
+  await press('Enter');
+  await press('Enter');
+  const labels = () => page.$$eval('#sheet .sheet-row .sheet-label', (els) => els.map((e) => e.textContent));
+  const before = await labels();
+  assert.equal(before[before.length - 1], 'Show everything the TV lists');
+  await press('ArrowDown', before.length - 1);
+  await press('Enter');
+  const after = await labels();
+  assert.ok(after.includes('e-Manual') && after.includes('Apps'), 'plumbing is listed on request');
+  assert.ok(!after.includes('Clean Hub'), 'never lists itself');
+  assert.equal(after[after.length - 1], 'Show only recognised apps');
+  // Add one of the hidden entries; it then shows on Home.
+  const idx = after.indexOf('Apps');
+  await press('ArrowUp', after.length - 1 - idx);
+  await press('Enter');
+  await press('Escape');
+  await press('Escape');
+  assert.ok((await homeNames()).includes('Apps'));
+});
+
+test('a cached list draws Home at once, and a hung TV call still lets Settings open', async () => {
+  await open();
+  await page.goto(base + '?hang=1');
+  await page.waitForFunction(() => window.CleanHub.main.state.loaded);
+  assert.equal((await homeNames())[0], 'Netflix', 'drawn from the cache');
+  assert.equal(await page.evaluate(() => window.CleanHub.main.state.fresh), false);
+  await press('ArrowDown', 8);
+  await press('Enter');
+  assert.equal((await state()).screen, 'settings');
+});
+
+test('holding OK launches once', async () => {
+  await open();
+  await page.keyboard.down('Enter');
+  await page.keyboard.down('Enter'); // auto-repeat
+  await page.keyboard.down('Enter');
+  await page.keyboard.up('Enter');
+  await page.waitForTimeout(100);
+  assert.equal((await state()).launches.length, 1);
 });

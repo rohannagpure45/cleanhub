@@ -29,6 +29,9 @@
     return KEYS[event.keyCode] || null;
   }
 
+  // Tizen callbacks sometimes never arrive, so every call gets a deadline.
+  const TIMEOUT_MS = 8000;
+
   // Plain copies of what we use, so nothing downstream holds Tizen objects.
   function listApps() {
     return new Promise(function (resolve, reject) {
@@ -36,8 +39,12 @@
         reject(new Error('Not running on a TV'));
         return;
       }
+      const timer = root.setTimeout(function () {
+        reject(new Error('The TV did not return its app list'));
+      }, TIMEOUT_MS);
       try {
         tizen().application.getAppsInfo(function (infos) {
+          root.clearTimeout(timer);
           resolve((infos || []).map(function (info) {
             return {
               id: info.id,
@@ -47,27 +54,39 @@
             };
           }));
         }, function (err) {
+          root.clearTimeout(timer);
           reject(new Error(err && err.message ? err.message : 'getAppsInfo failed'));
         });
       } catch (e) {
+        root.clearTimeout(timer);
         reject(e);
       }
     });
   }
 
+  // Resolves once the other app is opening. If neither callback comes, the
+  // launch counts as failed only if we are still on screen at the deadline
+  // (our timers stop while another app is in front).
   function launch(appId) {
     return new Promise(function (resolve, reject) {
       if (!onTV()) {
         reject(new Error('Not running on a TV'));
         return;
       }
+      const timer = root.setTimeout(function () {
+        if (root.document.hidden) resolve();
+        else reject(new Error('The app did not open'));
+      }, TIMEOUT_MS);
       try {
         tizen().application.launch(appId, function () {
+          root.clearTimeout(timer);
           resolve();
         }, function (err) {
+          root.clearTimeout(timer);
           reject(new Error(err && err.message ? err.message : 'launch failed'));
         });
       } catch (e) {
+        root.clearTimeout(timer);
         reject(e);
       }
     });
@@ -76,7 +95,7 @@
   // Tizen hands back plain filesystem paths for icons.
   function iconUrl(path) {
     if (!path) return null;
-    if (/^(file|https?|data):/i.test(path)) return path;
+    if (/^(file|wgt-package):/i.test(path)) return path;
     if (path.charAt(0) === '/') return 'file://' + path;
     return null;
   }
@@ -95,6 +114,7 @@
   }
 
   CH.platform = {
+    TIMEOUT_MS: TIMEOUT_MS,
     onTV: onTV,
     keyName: keyName,
     listApps: listApps,
