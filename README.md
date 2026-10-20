@@ -1,0 +1,102 @@
+# Clean Hub
+
+A quiet home screen for a Samsung Tizen TV, built for a 2022 **QN85B**
+(`QN85QN85BDFXZA`, Tizen 6.5). It lists the streaming apps already installed on
+the TV, lets you choose and order them, and opens them with the normal remote.
+
+It is an ordinary Tizen web app (HTML, CSS and JavaScript) installed through
+Samsung's Developer Mode. It does **not** root the TV, edit system files, or
+change what the Home button does. Samsung's own apps and Smart Hub stay
+exactly as they are.
+
+![List layout](docs/screens/list-dusk.png)
+
+| | |
+| --- | --- |
+| ![Dock layout](docs/screens/dock-tide.png) | ![Settings](docs/screens/settings.png) |
+| ![Type focus, Fraunces, Ember](docs/screens/list-type-fraunces-ember.png) | ![Apps on Home](docs/screens/apps-on-home.png) |
+
+## What you get
+
+- **Two layouts.** A big-type list, or a dock of tiles with a large clock.
+- **Your apps, your order.** Settings → Apps on Home. OK adds an app; on an
+  app that's already on Home, OK picks it up, ▲▼ move it, OK drops it, and ◀
+  removes it.
+- **Five backgrounds** (Dusk, Tide, Ember, Night, Paper), **three fonts**
+  (Manrope, Fraunces, Space Grotesk), **Glass or Type focus**, icons on or off,
+  and a 12/24-hour clock or none.
+- **Fast on the TV.** Backgrounds and their frosted "glass" copies are
+  pre-rendered images, and focus moves only animate `transform` and `opacity`.
+  Nothing blurs or repaints the full screen as you move.
+- **Offline.** Fonts and images are bundled; the app makes no network requests.
+
+### What it can't do
+
+- **The Home button still opens Samsung's Smart Hub.** Remapping it needs
+  root-level changes, which this project deliberately avoids. Clean Hub sits
+  first in Samsung's app bar instead, so it's one press of OK after Home.
+- **Starting on power-on depends on Samsung's "Autorun Last App".** The TV
+  reopens whatever app you used last, so Clean Hub comes back only if it was
+  the last app open when the TV went off.
+- **Ads inside apps** (YouTube, Prime Video, etc.) are untouched; it only
+  replaces the screen you pick apps from.
+- **App icons:** if the TV won't hand an app's icon to a web app, Clean Hub
+  shows a monogram tile in the service's colour instead.
+
+## Try it on a computer
+
+You need Node.js 20+.
+
+```sh
+npm install
+npm run dev
+```
+
+Open <http://127.0.0.1:8777/frame>. Click the TV, then use the arrow keys,
+**Enter** for OK and **Esc** for Back. The links at the top switch between a
+typical TV, many apps, unknown apps, no apps, and a TV that refuses the app
+list. The workbench fakes Tizen's app list and launcher; it never contacts a TV.
+
+## Tests
+
+```sh
+npm test         # unit tests + browser-compatibility check
+npm run test:ui  # drives the real app in Chromium with remote keys
+```
+
+`npm run check` fails the build if the shipped code uses JavaScript newer than
+ES2017, CSS the TV's Chromium may lack (flex `gap`, `inset`, `aspect-ratio`,
+`min()/max()/clamp()`, `:focus-visible`, …), live `backdrop-filter`, or any
+remote resource.
+
+### Browser baseline
+
+The checks assume Chromium 76 (Tizen 6.0), a little older than the QN85B's
+engine, so the same build also runs on 2021 sets.
+
+## Project layout
+
+```
+app/                the .wgt contents that ship to the TV
+  config.xml        Tizen widget manifest
+  index.html
+  css/              app.css, fonts.css (generated)
+  js/               catalog, options, store, apps, focus: pure logic
+                    platform.js: the only file that calls `tizen`
+                    ui.js: DOM; main.js: state and remote keys
+  img/              backgrounds (generated)
+  fonts/            Manrope, Fraunces, Space Grotesk (SIL OFL 1.1)
+scripts/            build, packaging, asset generation, compatibility check
+workbench/          desktop preview with a fake `tizen`
+test/unit, test/ui  node:test suites
+```
+
+Regenerate assets with `python3 scripts/gen-backgrounds.py` and
+`node scripts/vendor-fonts.mjs`; refresh the README screenshots with
+`node scripts/screenshots.mjs`.
+
+## Licence
+
+MIT for the code. Fonts are SIL Open Font License 1.1 (see `app/fonts/`).
+Service names and colours identify the apps installed on your TV; they belong
+to their owners.

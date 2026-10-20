@@ -367,28 +367,29 @@ html[data-layout="dock"] .clock-date {
 .dock-track {
   position: absolute;
   left: 0;
-  top: 40px;
+  top: 46px;
   white-space: nowrap;
   transition: transform var(--move) var(--ease);
   will-change: transform;
 }
 
+/* 8 apps + Settings fit without scrolling: 9 x 176 + separator < 1616. */
 .dock-item {
   position: relative;
   display: inline-block;
   vertical-align: top;
-  width: 160px;
-  height: 160px;
-  margin-right: 32px;
+  width: 148px;
+  height: 148px;
+  margin-right: 28px;
   transition: transform var(--move) var(--ease), opacity var(--move) var(--ease);
   transform: scale(0.9);
 }
 
 .dock-item .tile {
-  width: 160px;
-  height: 160px;
-  border-radius: 40px;
-  font-size: 44px;
+  width: 148px;
+  height: 148px;
+  border-radius: 38px;
+  font-size: 42px;
 }
 
 .dock-item.is-focused {
@@ -401,7 +402,7 @@ html[data-layout="dock"] .clock-date {
   top: -8px;
   right: -8px;
   bottom: -8px;
-  border-radius: 48px;
+  border-radius: 46px;
   box-shadow: 0 0 0 4px var(--fg);
   opacity: 0;
   transition: opacity var(--move) var(--ease);
@@ -427,8 +428,8 @@ html[data-focus="type"] .dock-ring {
   display: inline-block;
   vertical-align: top;
   width: 2px;
-  height: 120px;
-  margin: 20px 34px 0 2px;
+  height: 108px;
+  margin: 20px 30px 0 2px;
   background: var(--fg-faint);
 }
 
