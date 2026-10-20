@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.tv/
+*.wgt
+.DS_Store
+test-results/

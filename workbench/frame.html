@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clean Hub workbench</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; height: 100vh; background: #111; color: #bbb; font: 14px system-ui, sans-serif; display: flex; flex-direction: column; }
+    .bar { padding: 10px 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .bar a { color: #9cf; }
+    .stage { flex: 1; position: relative; overflow: hidden; }
+    iframe { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; transform-origin: 0 0; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <strong>Clean Hub workbench</strong>
+    <span>Click the TV, then use arrows, Enter (OK), Esc (Back).</span>
+    <a href="?apps=typical">typical</a>
+    <a href="?apps=many">many apps</a>
+    <a href="?apps=unknown">unknown apps</a>
+    <a href="?apps=none">no apps</a>
+    <a href="?listFail=1">list fails</a>
+  </div>
+  <div class="stage"><iframe id="tv" title="TV"></iframe></div>
+  <script>
+    var tv = document.getElementById('tv');
+    tv.src = '/' + location.search;
+    function fit() {
+      var stage = tv.parentNode.getBoundingClientRect();
+      var s = Math.min(stage.width / 1920, stage.height / 1080);
+      tv.style.transform = 'translate(' + (stage.width - 1920 * s) / 2 + 'px,' + (stage.height - 1080 * s) / 2 + 'px) scale(' + s + ')';
+    }
+    addEventListener('resize', fit);
+    fit();
+    tv.addEventListener('load', function () { tv.focus(); });
+  </script>
+</body>
+</html>

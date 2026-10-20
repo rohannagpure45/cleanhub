@@ -1,0 +1,24 @@
+{
+  "name": "cleanhub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A quiet home screen for a Samsung Tizen TV, installed as an ordinary Developer Mode web app.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "node workbench/server.mjs",
+    "check": "node scripts/check-compat.mjs",
+    "test": "node --test test/unit/*.test.mjs && node scripts/check-compat.mjs",
+    "test:ui": "node --test test/ui/*.test.mjs",
+    "test:all": "npm test && npm run test:ui",
+    "backgrounds": "node scripts/gen-backgrounds.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "@fontsource/fraunces": "^5.3.0",
+    "@fontsource/manrope": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
+    "acorn": "^8.19.0",
+    "playwright": "^1.58.2"
+  }
+}
