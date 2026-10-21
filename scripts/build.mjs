@@ -34,8 +34,10 @@ export function wallpaperProblems() {
   return out.concat(motionProblems(ctx.CleanHub.options.wallpaper, css));
 }
 
-// Every moving layer in js/walls.js needs its picture, keyframes app.css
-// defines, and (if it drifts) a width of exactly two of its seamless tiles.
+// Every moving layer in js/walls.js needs its picture (and mask), keyframes
+// app.css defines, and (if it drifts or rolls) a width or height of exactly
+// two of its seamless tiles; and every wallpaper with layers must still be a
+// choice in options.js.
 export function motionProblems(walls, css) {
   const ctx = {};
   vm.runInNewContext(readFileSync(ROOT + 'app/js/walls.js', 'utf8'), ctx);
@@ -45,13 +47,21 @@ export function motionProblems(walls, css) {
   for (const w of walls) {
     if (w.kind === 'scene' && !layers[w.id]) out.push(`wallpaper ${w.id}: no moving layers in js/walls.js`);
   }
+  const ids = new Set(walls.map((w) => w.id));
+  for (const id of Object.keys(layers)) {
+    if (walls.length && !ids.has(id)) out.push(`wallpaper ${id}: has layers in js/walls.js but isn't in options.js (run npm run wallpapers)`);
+  }
   for (const [id, list] of Object.entries(layers)) {
     for (const l of list) {
       if (l.src && !existsSync(ROOT + 'app/' + l.src)) out.push(`wallpaper ${id}: ${l.src} is missing (run npm run wallpapers)`);
+      const mask = l.box && l.box.maskSrc;
+      if (mask && !existsSync(ROOT + 'app/' + mask)) out.push(`wallpaper ${id}: ${mask} is missing (run npm run wallpapers)`);
       for (const name of (l.anim || '').split(',').map((a) => a.trim().split(/\s+/)[0]).filter(Boolean)) {
         if (!keyframes.has(name)) out.push(`wallpaper ${id}: app.css has no @keyframes ${name}`);
         const drift = name.match(/^wall-drift-(\d+)$/);
         if (drift && l.w !== 2 * Number(drift[1])) out.push(`wallpaper ${id}: ${l.src} drifts by ${drift[1]} px but is ${l.w} px wide`);
+        const roll = name.match(/^wall-roll-(\d+)$/);
+        if (roll && l.h !== 2 * Number(roll[1])) out.push(`wallpaper ${id}: ${l.src} rolls by ${roll[1]} px but is ${l.h} px tall`);
       }
     }
   }

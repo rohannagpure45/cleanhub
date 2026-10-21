@@ -702,9 +702,11 @@
   // a short wait, so a slow or missing file never holds the change up).
   function decodeWall(id, moving, done) {
     const layers = wallLayers(id, moving);
-    const srcs = layers
-      ? layers.filter(function (l) { return l.src; }).map(function (l) { return l.src; })
-      : (id === 'black' ? [] : ['img/ambient-' + id + '.jpg']);
+    const srcs = layers ? [] : (id === 'black' ? [] : ['img/ambient-' + id + '.jpg']);
+    (layers || []).forEach(function (l) {
+      if (l.src) srcs.push(l.src);
+      if (l.box && l.box.maskSrc) srcs.push(l.box.maskSrc);
+    });
     let left = srcs.length;
     let called = false;
     const finish = function () {
@@ -743,17 +745,17 @@
   }
 
   // One layer of a moving wallpaper: a picture with a CSS animation (maybe
-  // clipped or masked by a box, or seen through a moving sheen), or an
-  // effect drawn by CSS alone.
+  // clipped or masked by a box), or an effect drawn by CSS alone.
   function wallLayer(l) {
     if (l.kind === 'drops') {
       const drops = h('div', 'wall-drops');
       l.drops.forEach(function (d) {
         const drop = h('div', 'wall-drop');
         drop.style.left = d.x + 'px';
+        drop.style.top = (d.y || 0) + 'px';
         drop.style.width = Math.round(10 * d.size) + 'px';
         drop.style.height = Math.round(120 * d.size) + 'px';
-        drop.style.animation = 'wall-fall ' + d.dur + 's cubic-bezier(0.5, 0, 0.8, 1) ' + (-d.delay) + 's infinite';
+        drop.style.animation = 'wall-fall ' + d.dur + 's linear ' + (-d.delay) + 's infinite';
         drops.appendChild(drop);
       });
       return drops;
@@ -772,25 +774,25 @@
     setBox(pic, l);
     pic.style.backgroundImage = 'url(' + l.src + ')';
     if (l.anim) pic.style.animation = l.anim;
-    if (l.origin) pic.style.transformOrigin = l.origin;
-    if (l.sheen) {
-      // A soft band sweeps across while the picture inside it moves the other
-      // way just as fast: the picture stays put and only the band moves.
-      const band = h('div', 'wall-sheen');
-      band.style.animationDuration = l.sheen + 's';
-      pic.className = 'wall-layer wall-sheen-pic';
-      pic.style.animationDuration = l.sheen + 's';
-      band.appendChild(pic);
-      return band;
-    }
     if (!l.box) return pic;
     const box = h('div', 'wall-box');
     setBox(box, l.box);
-    if (l.box.mask) {
-      box.style.webkitMaskImage = l.box.mask;
-      box.style.maskImage = l.box.mask;
+    const mask = l.box.maskSrc ? 'url(' + l.box.maskSrc + ')' : l.box.mask;
+    if (mask) {
+      box.style.webkitMaskImage = mask;
+      box.style.maskImage = mask;
     }
-    box.appendChild(pic);
+    if (l.tilt) {
+      // A drift along a slope: the picture slides inside a turned frame,
+      // while the box around it stays square to the screen.
+      const tilt = h('div', 'wall-tilt');
+      setBox(tilt, { x: 0, y: 0, w: l.box.w, h: l.box.h });
+      tilt.style.transform = 'rotate(' + l.tilt + 'deg)';
+      tilt.appendChild(pic);
+      box.appendChild(tilt);
+    } else {
+      box.appendChild(pic);
+    }
     return box;
   }
 

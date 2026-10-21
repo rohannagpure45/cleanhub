@@ -85,9 +85,9 @@ await shot('ambient-controls', S({}), ['Enter']);
 await shot('ambient-lamp', S({}), ['Enter'], '', 7000);
 await shot('ambient-midnight', S({ wallpaper: 'midnight' }), ['Enter'], '', 7000);
 
-// Ambient's six full-colour scenes, once the controls have faded.
+// Ambient's five full-colour scenes, once the controls have faded.
 const scenes = [];
-for (const wallpaper of ['sunset', 'coast', 'dunes', 'aurora', 'rain', 'deco']) {
+for (const wallpaper of ['sunset', 'coast', 'dunes', 'aurora', 'rain']) {
   const page = await open(S({ wallpaper }));
   await press(page, ['Enter']);
   await page.waitForTimeout(7000);

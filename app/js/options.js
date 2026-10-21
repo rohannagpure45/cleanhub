@@ -49,7 +49,6 @@
       { id: 'dunes', name: 'Dunes', kind: 'scene' },
       { id: 'aurora', name: 'Aurora', kind: 'scene' },
       { id: 'rain', name: 'City Rain', kind: 'scene' },
-      { id: 'deco', name: 'Deco', kind: 'scene' },
       { id: 'rotate', name: 'Rotate', kind: 'rotate' }
     ],
     // Moving layers (js/walls.js), or the still pictures.

@@ -19,5 +19,11 @@ test('every Ambient wallpaper has its picture, swatch and CSS rule', () => {
 test('the moving-layer check catches missing keyframes', () => {
   const found = motionProblems([], '');
   assert.ok(found.some((p) => p.includes('@keyframes wall-drift-1920')), found.join('\n'));
-  assert.ok(found.some((p) => p.includes('@keyframes wall-pulse')));
+  assert.ok(found.some((p) => p.includes('@keyframes wall-glimmer')));
+  assert.ok(found.some((p) => p.includes('@keyframes wall-roll-240')));
+});
+
+test('the moving-layer check catches layers for a wallpaper that is no longer a choice', () => {
+  const found = motionProblems([{ id: 'lamp', kind: 'dark' }], '');
+  assert.ok(found.some((p) => p.includes('wallpaper coast: has layers in js/walls.js but isn\'t in options.js')), found.join('\n'));
 });

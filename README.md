@@ -24,12 +24,14 @@ exactly as they are.
   genres you tick in Settings (original jazz, 1920s, classical, piano,
   ragtime, big band, ambient), made to leave on all day (see
   [docs/TV-SETUP.md](docs/TV-SETUP.md#ambient-leaving-it-on-all-day)). Three
-  wallpapers are near-black and low power (Lamp, Midnight, Black); six are
-  full-colour scenes (Sunset, Coast, Dunes, Aurora, City Rain, Deco); Rotate
+  wallpapers are near-black and low power (Lamp, Midnight, Black); five are
+  full-colour scenes (Sunset, Coast, Dunes, Aurora, City Rain); Rotate
   shows a new scene every 15 minutes. ▲▼ in Ambient change it, with a
-  cross-fade. They move: clouds, mist, aurora, blowing sand and traffic drift
-  left to right; glitter, stars and city lights shimmer; Deco's sunburst
-  turns. Settings → Wallpaper motion: Off keeps them still.
+  cross-fade. They move the way the real thing would: clouds and mist drift
+  with the wind, swell rolls in to the shore, sand streams off the dune
+  crests, the aurora's ribbons fold past each other, traffic runs both ways,
+  drops cling to the glass and then run, and stars twinkle on their own.
+  Settings → Wallpaper motion: Off keeps them still.
 - **Brainrot mode.** The last row of Settings turns Ambient into a TikTok-style
   feed of ten kinds of video: split-screen stories over an endless runner,
   texting stories over sky parkour, a ball escaping rings, aura ratings,
