@@ -35,8 +35,10 @@ await shot('list-type-fraunces-ember', S({ theme: 'ember', font: 'fraunces', foc
 await shot('list-text-night', S({ theme: 'night', icons: 'off', font: 'grotesk' }));
 await shot('dock-tide', S({ layout: 'dock', theme: 'tide' }), ['ArrowRight']);
 await shot('dock-paper', S({ layout: 'dock', theme: 'paper', font: 'grotesk' }), ['ArrowRight', 'ArrowRight']);
-await shot('settings', S({}), Array(8).fill('ArrowDown').concat(['Enter', 'ArrowDown', 'ArrowDown']));
-await shot('apps-on-home', S({}), Array(8).fill('ArrowDown').concat(['Enter', 'Enter', 'ArrowDown', 'Enter', 'ArrowDown']));
+await shot('settings', S({}), ['ArrowRight', 'Enter', 'ArrowDown', 'ArrowDown']);
+await shot('apps-on-home', S({}), ['ArrowRight', 'Enter', 'Enter', 'ArrowDown', 'Enter', 'ArrowDown']);
+await shot('list-paper-many', S({ theme: 'paper', focus: 'type' }), ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown'], '?apps=many');
+await shot('home-gear-focused', S({ theme: 'tide' }), ['ArrowRight']);
 
 await browser.close();
 server.close();

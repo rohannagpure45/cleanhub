@@ -160,6 +160,62 @@
     return out;
   }
 
+  // The catalog app a Tizen id belongs to (e.g. HBO Max's old and new ids
+  // are both 'max'), or null.
+  function catalogKey(id, catalog) {
+    for (let i = 0; i < catalog.length; i++) {
+      if (catalog[i].ids && catalog[i].ids.indexOf(id) !== -1) return catalog[i].key;
+    }
+    return null;
+  }
+
+  // Saved ids rewritten to the id the TV now lists for the same app, when an
+  // app moved to a new id (HBO Max to Max, YouTube to its Cobalt build).
+  // Returns null when nothing changed.
+  function migrateIds(saved, entries, catalog) {
+    const present = {};
+    const byKey = {};
+    entries.forEach(function (e) {
+      present[e.id] = true;
+      if (e.key) byKey[e.key] = e.id;
+    });
+    const seen = {};
+    const out = [];
+    let changed = false;
+    saved.forEach(function (id) {
+      let to = id;
+      if (!present[id]) {
+        const key = catalogKey(id, catalog);
+        if (key && byKey[key]) to = byKey[key];
+      }
+      if (to !== id || seen[to]) changed = true;
+      if (!seen[to]) {
+        seen[to] = true;
+        out.push(to);
+      }
+    });
+    return changed ? out : null;
+  }
+
+  // The new saved list after the viewer edits what's on Home. `visibleIds` is
+  // the edited order of the apps they can see; saved apps that aren't on the
+  // TV right now (`present` lacks them) keep their slots, so an app that is
+  // briefly missing during an update comes back where it was. Over `max`,
+  // missing apps are dropped first, never ones the viewer can see.
+  function mergeChosen(prev, visibleIds, present, max) {
+    const queue = visibleIds.slice();
+    const out = [];
+    prev.forEach(function (id) {
+      if (!present[id]) out.push(id);
+      else if (queue.length) out.push(queue.shift());
+    });
+    const merged = out.concat(queue);
+    for (let i = merged.length - 1; i >= 0 && merged.length > max; i--) {
+      if (!present[merged[i]] && visibleIds.indexOf(merged[i]) === -1) merged.splice(i, 1);
+    }
+    return merged;
+  }
+
   function move(ids, from, to) {
     const out = ids.slice();
     if (from < 0 || from >= out.length) return out;
@@ -182,6 +238,9 @@
     arrange: arrange,
     move: move,
     toggle: toggle,
+    catalogKey: catalogKey,
+    migrateIds: migrateIds,
+    mergeChosen: mergeChosen,
     monogram: monogram,
     fillFor: fillFor
   };

@@ -33,26 +33,32 @@
   const TIMEOUT_MS = 8000;
 
   // Plain copies of what we use, so nothing downstream holds Tizen objects.
-  function listApps() {
+  // Rejects at the deadline; if the TV answers after that, `onLate` gets the
+  // list instead (the TV was slow, not broken).
+  function listApps(onLate) {
     return new Promise(function (resolve, reject) {
       if (!onTV()) {
         reject(new Error('Not running on a TV'));
         return;
       }
+      let late = false;
       const timer = root.setTimeout(function () {
+        late = true;
         reject(new Error('The TV did not return its app list'));
       }, TIMEOUT_MS);
       try {
         tizen().application.getAppsInfo(function (infos) {
           root.clearTimeout(timer);
-          resolve((infos || []).map(function (info) {
+          const list = (infos || []).map(function (info) {
             return {
               id: info.id,
               name: info.name,
               iconPath: info.iconPath,
               show: info.show
             };
-          }));
+          });
+          if (!late) resolve(list);
+          else if (onLate) onLate(list);
         }, function (err) {
           root.clearTimeout(timer);
           reject(new Error(err && err.message ? err.message : 'getAppsInfo failed'));
@@ -64,30 +70,39 @@
     });
   }
 
-  // Resolves once the other app is opening. If neither callback comes, the
-  // launch counts as failed only if we are still on screen at the deadline
-  // (our timers stop while another app is in front).
+  // Resolves once the other app is opening. Going to the background counts as
+  // opened even if Tizen never calls back; only an error, or the deadline with
+  // us still on screen the whole time, counts as failed. (Our timers pause
+  // while another app is in front, so the deadline alone can't tell.)
   function launch(appId) {
     return new Promise(function (resolve, reject) {
       if (!onTV()) {
         reject(new Error('Not running on a TV'));
         return;
       }
-      const timer = root.setTimeout(function () {
-        if (root.document.hidden) resolve();
-        else reject(new Error('The app did not open'));
+      const doc = root.document;
+      let timer = null;
+      function done(err) {
+        root.clearTimeout(timer);
+        doc.removeEventListener('visibilitychange', onHidden);
+        if (err) reject(err);
+        else resolve();
+      }
+      function onHidden() {
+        if (doc.hidden) done();
+      }
+      doc.addEventListener('visibilitychange', onHidden);
+      timer = root.setTimeout(function () {
+        done(doc.hidden ? null : new Error('The app did not open'));
       }, TIMEOUT_MS);
       try {
         tizen().application.launch(appId, function () {
-          root.clearTimeout(timer);
-          resolve();
+          done();
         }, function (err) {
-          root.clearTimeout(timer);
-          reject(new Error(err && err.message ? err.message : 'launch failed'));
+          done(new Error(err && err.message ? err.message : 'launch failed'));
         });
       } catch (e) {
-        root.clearTimeout(timer);
-        reject(e);
+        done(e);
       }
     });
   }

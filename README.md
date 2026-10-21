@@ -19,6 +19,8 @@ exactly as they are.
 ## What you get
 
 - **Two layouts.** A big-type list, or a dock of tiles with a large clock.
+- **Settings is the button top right.** Press ▶ from the list, or ▲ from the
+  dock; ◀, ▼ or Back returns to your app.
 - **Your apps, your order.** Settings → Apps on Home. OK adds an app; on an
   app that's already on Home, OK picks it up, ▲▼ move it, OK drops it, and ◀
   removes it.
@@ -42,6 +44,22 @@ exactly as they are.
   replaces the screen you pick apps from.
 - **App icons:** if the TV won't hand an app's icon to a web app, Clean Hub
   shows a monogram tile in the service's colour instead.
+- **Untested on the panel itself so far.** The app list, ids and launch
+  behaviour follow other launchers that run on 2022 Samsung sets. If an app is
+  missing, Settings → Apps on Home → *Show everything the TV lists* rescues it.
+
+## Put it on the TV
+
+See **[docs/TV-SETUP.md](docs/TV-SETUP.md)**. In short: turn on Developer Mode
+on the TV with this Mac as the trusted host, then
+
+```sh
+python3 scripts/tv.py install-sdk --accept-license   # once
+python3 scripts/tv.py setup                          # once; back up ~/.cleanhub
+python3 scripts/tv.py install --tv <TV IP>
+```
+
+and pin Clean Hub first in Samsung's app bar.
 
 ## Try it on a computer
 
@@ -60,7 +78,7 @@ list. The workbench fakes Tizen's app list and launcher; it never contacts a TV.
 ## Tests
 
 ```sh
-npm test         # unit tests + browser-compatibility check
+npm test         # unit tests, browser-compatibility check, installer tests
 npm run test:ui  # drives the real app in Chromium with remote keys
 ```
 
@@ -86,7 +104,7 @@ app/                the .wgt contents that ship to the TV
                     ui.js: DOM; main.js: state and remote keys
   img/              backgrounds (generated)
   fonts/            Manrope, Fraunces, Space Grotesk (SIL OFL 1.1)
-scripts/            build, packaging, asset generation, compatibility check
+scripts/            build.mjs, tv.py (sign/install), asset generation, compatibility check
 workbench/          desktop preview with a fake `tizen`
 test/unit, test/ui  node:test suites
 ```

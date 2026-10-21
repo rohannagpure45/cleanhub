@@ -4,6 +4,7 @@
   const CH = root.CleanHub;
   const doc = root.document;
   const VERSION = '0.1.0';
+  const SWITCH = '\u0000switch'; // focus key of the apps sheet's last row
 
   const state = {
     settings: null,
@@ -11,15 +12,19 @@
     all: [], // apps on the TV after filtering, normalised
     home: [], // apps shown on the home screen, in order
     loaded: false, // some app list (cached or live) is showing
-    fresh: false, // the live list from the TV has arrived
+    fresh: false, // the TV has answered (or failed) at least once
     error: null,
-    showEverything: false, // apps sheet lists every entry the TV reports
     screen: 'home', // 'home' | 'settings' | 'apps'
-    homeIndex: 0,
+    homeIndex: 0, // the focused (or, on Settings, last focused) app
+    homeOnGear: false, // Settings button has focus
     settingsIndex: 0,
     appsIndex: 0,
+    appsFocus: null, // id of the focused apps-sheet row (or SWITCH); survives re-sorting
+    rows: [], // apps-sheet rows as last drawn
+    showEverything: false, // apps sheet lists every entry the TV reports
     moving: -1, // index in the apps sheet of the app being moved
-    movingFrom: null, // order before the move, for Back = cancel
+    movingId: null,
+    movingSaved: null, // settings.apps before the move, for Back = cancel
     confirmReset: false
   };
 
@@ -59,6 +64,11 @@
     }
   }
 
+  function setApps(apps) {
+    state.settings = CH.store.sanitize(Object.assign({}, state.settings, { apps: apps }));
+    save();
+  }
+
   function homeIds() {
     return state.home.map(function (e) { return e.id; });
   }
@@ -88,52 +98,69 @@
   // ---- Home ----------------------------------------------------------------
 
   function homeNote() {
-    if (!state.loaded) return '';
-    if (state.error) return 'Couldn’t read this TV’s apps. Settings still works.';
-    if (!state.home.length) return 'No apps on Home yet. Pick some in Settings.';
+    if (!state.loaded) return 'Loading your apps…';
+    if (state.error) return 'Couldn’t read this TV’s apps. Settings (top right) still works.';
+    if (!state.home.length) return 'No apps on Home yet. Pick some in Settings, top right.';
     return '';
   }
 
+  // Settings has focus while a sheet is open (sheets open from it), or when
+  // the viewer put it there, or when there is nothing else.
+  function onGear() {
+    return state.screen !== 'home' || state.homeOnGear || !state.home.length;
+  }
+
   function renderHome(keepId) {
-    const container = doc.getElementById('home');
-    CH.ui.renderHome(container, state.home, state.settings, homeNote());
     let index = state.homeIndex;
     if (keepId) {
       const found = homeIds().indexOf(keepId);
       if (found !== -1) index = found;
     }
-    state.homeIndex = Math.max(0, Math.min(state.home.length, index));
-    CH.ui.focusHome(state.homeIndex, true);
+    state.homeIndex = Math.max(0, Math.min(state.home.length - 1, index));
+    CH.ui.renderHome(doc.getElementById('home'), state.home, state.settings, homeNote(),
+      { index: state.homeIndex, gear: onGear() });
     tick();
   }
 
   function focusedHomeId() {
+    if (onGear()) return null;
     const e = state.home[state.homeIndex];
     return e ? e.id : null;
   }
 
+  // List: Up/Down move, Right goes to Settings. Dock: Left/Right move, Up goes
+  // to Settings. From Settings, the opposite key or Back returns.
   function onHomeKey(key) {
-    const count = state.home.length + 1; // apps + Settings
+    const dock = state.settings.layout === 'dock';
     if (key === 'ok') {
-      if (state.homeIndex === state.home.length) {
-        openSettings();
-        return;
+      if (onGear()) openSettings();
+      else launch(state.home[state.homeIndex]);
+      return;
+    }
+    if (onGear()) {
+      const back = key === 'back' || (dock ? key === 'down' : key === 'left' || key === 'down');
+      if (back && state.home.length) {
+        state.homeOnGear = false;
+        CH.ui.focusHome(state.homeIndex, false);
       }
-      launch(state.home[state.homeIndex]);
+      return;
+    }
+    if (key === (dock ? 'up' : 'right')) {
+      state.homeOnGear = true;
+      CH.ui.focusHome(state.homeIndex, true);
       return;
     }
     const d = CH.focus.delta(state.settings.layout, key);
-    if (d) {
-      const next = CH.focus.step(state.homeIndex, count, d);
-      if (next !== state.homeIndex) {
-        state.homeIndex = next;
-        CH.ui.focusHome(next);
-      }
+    if (!d) return; // Back on Home does nothing: this is the home screen.
+    const next = CH.focus.step(state.homeIndex, state.home.length, d);
+    if (next !== state.homeIndex) {
+      state.homeIndex = next;
+      CH.ui.focusHome(next, false);
     }
-    // Back on Home does nothing: this is the home screen.
   }
 
   function launch(entry) {
+    if (!entry) return;
     CH.ui.pressHome(state.homeIndex);
     CH.platform.launch(entry.id).catch(function () {
       CH.ui.toast('Couldn’t open ' + entry.name);
@@ -149,34 +176,34 @@
       version: VERSION,
       homeCount: state.home.length,
       confirmReset: state.confirmReset
-    });
-    CH.ui.focusSheet(state.settingsIndex, true);
+    }, state.settingsIndex);
   }
 
   function openSettings() {
     state.screen = 'settings';
+    state.homeOnGear = true;
     state.settingsIndex = 0;
     state.confirmReset = false;
     renderSettings();
     CH.ui.openSheet(true);
+    CH.ui.warmThemes(CH.options.theme.map(function (t) { return t.id; }));
   }
 
   function closeSettings() {
     state.screen = 'home';
     state.confirmReset = false;
     CH.ui.openSheet(false);
-    CH.ui.focusHome(state.homeIndex);
+    CH.ui.focusHome(state.homeIndex, onGear());
   }
 
   // Applies a settings change everywhere it shows.
   function changeSettings(next) {
-    const keepId = focusedHomeId();
-    const layoutChanged = next.layout !== state.settings.layout || next.clock !== state.settings.clock ||
+    const relayout = next.layout !== state.settings.layout || next.clock !== state.settings.clock ||
       next.icons !== state.settings.icons;
     state.settings = next;
     save();
     CH.ui.applyLook(next);
-    if (layoutChanged) renderHome(keepId);
+    if (relayout) renderHome(null);
   }
 
   function onSettingsKey(key) {
@@ -203,14 +230,15 @@
       if (key !== 'ok') return;
       if (!state.confirmReset) {
         state.confirmReset = true;
-      } else {
-        state.confirmReset = false;
-        changeSettings(CH.store.defaults());
-        arrangeHome();
-        renderHome(null);
-        CH.ui.toast('Settings reset');
+        renderSettings();
+        return;
       }
+      state.confirmReset = false;
+      changeSettings(CH.store.defaults());
+      arrangeHome();
+      renderHome(null);
       renderSettings();
+      CH.ui.toast('Settings reset');
       return;
     }
     const dir = key === 'left' ? -1 : (key === 'right' || key === 'ok') ? 1 : 0;
@@ -246,62 +274,88 @@
     return rows;
   }
 
-  // The apps sheet's focusable rows are the apps plus one toggle at the end.
+  function visibleChosen(rows) {
+    return rows.filter(function (r) { return r.on; }).map(function (r) { return r.entry.id; });
+  }
+
+  function keyAt(rows, index) {
+    return rows[index] ? rows[index].entry.id : SWITCH;
+  }
+
+  function endMove() {
+    state.moving = -1;
+    state.movingId = null;
+    state.movingSaved = null;
+  }
+
+  // Redraws the apps sheet. Focus and the moving app are tracked by id, so a
+  // refresh or a re-sort can't leave them on the wrong row.
   function renderApps() {
     const rows = appRows();
-    state.appsIndex = Math.max(0, Math.min(rows.length, state.appsIndex));
-    CH.ui.renderAppsSheet(rows, state.moving, state.appsIndex, state.showEverything);
-    CH.ui.focusSheet(state.appsIndex, true);
-    return rows;
+    state.rows = rows;
+    if (state.moving !== -1) {
+      const at = visibleChosen(rows).indexOf(state.movingId);
+      if (at === -1) endMove();
+      else state.moving = at;
+    }
+    let index = state.appsFocus === SWITCH ? rows.length : -1;
+    for (let i = 0; i < rows.length && index === -1; i++) {
+      if (rows[i].entry.id === state.appsFocus) index = i;
+    }
+    if (state.moving !== -1) index = state.moving;
+    state.appsIndex = index === -1 ? Math.max(0, Math.min(rows.length, state.appsIndex)) : index;
+    state.appsFocus = keyAt(rows, state.appsIndex);
+    CH.ui.renderAppsSheet(rows, state.moving, state.appsIndex, {
+      everything: state.showEverything,
+      failed: !!state.error,
+      full: visibleChosen(rows).length >= CH.store.MAX_APPS
+    });
   }
 
   function openApps() {
     state.screen = 'apps';
     state.appsIndex = 0;
-    state.moving = -1;
+    state.appsFocus = null;
     state.showEverything = false;
+    endMove();
     renderApps();
     refreshApps();
   }
 
-  // Saves a new chosen list. Ids of apps not currently installed are kept at
-  // the end, so an app that is updated or briefly missing keeps its place.
+  // Saves the edited order of the visible apps, keeping the slots of saved
+  // apps the TV doesn't list right now.
   function setChosen(visibleIds) {
-    const installed = {};
-    state.raw.forEach(function (info) { if (info && info.id) installed[info.id] = true; });
-    const missing = chosenIds().filter(function (id) { return !installed[id]; });
-    const next = Object.assign({}, state.settings, { apps: visibleIds.concat(missing) });
-    state.settings = CH.store.sanitize(next);
-    save();
+    const present = {};
+    state.raw.forEach(function (info) { if (info && info.id) present[info.id] = true; });
+    setApps(CH.apps.mergeChosen(chosenIds(), visibleIds, present, CH.store.MAX_APPS));
     arrangeHome();
   }
 
-  function visibleChosen(rows) {
-    return rows.filter(function (r) { return r.on; }).map(function (r) { return r.entry.id; });
-  }
-
   function onAppsKey(key) {
-    const rows = appRows();
+    const rows = state.rows;
     const row = rows[state.appsIndex];
 
     if (state.moving !== -1) {
       if (key === 'up' || key === 'down') {
         const ids = visibleChosen(rows);
-        const to = CH.focus.step(state.moving, ids.length, key === 'down' ? 1 : -1);
-        if (to === state.moving) return;
-        setChosen(CH.apps.move(ids, state.moving, to));
+        const from = state.moving;
+        const to = CH.focus.step(from, ids.length, key === 'down' ? 1 : -1);
+        if (to === from) return;
+        setChosen(CH.apps.move(ids, from, to));
         state.moving = to;
         state.appsIndex = to;
-        renderApps();
+        CH.ui.moveAppsRow(from, to); // in place: rebuilding per step lags on a TV
       } else if (key === 'ok') {
-        state.moving = -1;
-        state.movingFrom = null;
+        endMove();
         renderApps();
       } else if (key === 'back') {
-        setChosen(state.movingFrom);
-        state.appsIndex = state.movingFrom.indexOf(rows[state.moving].entry.id);
-        state.moving = -1;
-        state.movingFrom = null;
+        // Cancel: put back exactly what was saved, including "not chosen yet".
+        if (state.settings.apps !== state.movingSaved) {
+          setApps(state.movingSaved);
+          arrangeHome();
+        }
+        state.appsFocus = state.movingId;
+        endMove();
         renderApps();
       }
       return;
@@ -309,7 +363,7 @@
 
     if (key === 'back') {
       state.screen = 'settings';
-      renderHome(focusedHomeId());
+      renderHome(null);
       renderSettings();
       return;
     }
@@ -317,30 +371,37 @@
       const next = CH.focus.step(state.appsIndex, rows.length + 1, key === 'down' ? 1 : -1);
       if (next !== state.appsIndex) {
         state.appsIndex = next;
+        state.appsFocus = keyAt(rows, next);
         CH.ui.focusSheet(next);
-        CH.ui.updateAppsHint(rows, state.moving, next);
+        CH.ui.updateAppsHint(next);
       }
       return;
     }
     if (!row) {
       if (key === 'ok') {
         state.showEverything = !state.showEverything;
-        state.appsIndex = appRows().length; // stay on the switch, which moves as rows come and go
+        state.appsFocus = SWITCH;
         renderApps();
       }
       return;
     }
+    const visible = visibleChosen(rows);
     if (key === 'ok' && !row.on) {
-      const ids = visibleChosen(rows).concat([row.entry.id]);
-      setChosen(ids);
-      state.appsIndex = ids.length - 1;
+      if (visible.length >= CH.store.MAX_APPS) {
+        CH.ui.toast('Home holds up to ' + CH.store.MAX_APPS + ' apps. Remove one first.');
+        return;
+      }
+      setChosen(visible.concat([row.entry.id]));
+      state.appsFocus = row.entry.id;
       renderApps();
     } else if (key === 'ok' && row.on) {
       state.moving = state.appsIndex;
-      state.movingFrom = visibleChosen(rows);
+      state.movingId = row.entry.id;
+      state.movingSaved = state.settings.apps;
       renderApps();
     } else if (key === 'left' && row.on) {
-      setChosen(CH.apps.toggle(visibleChosen(rows), row.entry.id));
+      setChosen(CH.apps.toggle(visible, row.entry.id));
+      state.appsFocus = row.entry.id; // follow it, so OK puts it straight back
       renderApps();
     }
   }
@@ -352,26 +413,50 @@
     state.all = CH.apps.normalize(raw, CH.catalog);
   }
 
+  // Saved ids follow an app to its new id (HBO Max to Max, and so on).
+  function migrateSaved() {
+    if (!Array.isArray(state.settings.apps)) return;
+    const next = CH.apps.migrateIds(state.settings.apps, state.all, CH.catalog);
+    if (next) setApps(next);
+  }
+
+  // Requests are numbered so a slow, older answer never replaces a newer one.
+  let listSeq = 0;
+  let appliedSeq = 0;
+
+  function applyList(seq, infos) {
+    if (seq < appliedSeq) return false;
+    appliedSeq = seq;
+    state.error = null;
+    setRaw(infos);
+    writeCache(infos);
+    migrateSaved();
+    return true;
+  }
+
+  // Brings every screen in line with a new app list.
+  function redraw() {
+    const keepId = focusedHomeId();
+    state.loaded = true;
+    state.fresh = true;
+    arrangeHome();
+    renderHome(keepId);
+    if (state.screen === 'settings') renderSettings();
+    else if (state.screen === 'apps') renderApps();
+  }
+
   function refreshApps() {
-    return CH.platform.listApps().then(function (infos) {
-      state.error = null;
-      setRaw(infos);
-      writeCache(infos);
+    const seq = ++listSeq;
+    // An answer after the deadline still counts: the TV was only slow.
+    const late = function (infos) {
+      if (applyList(seq, infos)) redraw();
+    };
+    return CH.platform.listApps(late).then(function (infos) {
+      applyList(seq, infos);
     }, function (err) {
       // Keep showing a cached list if there is one; say so only if not.
-      state.error = state.raw.length ? null : err;
-    }).then(function () {
-      const keepId = focusedHomeId();
-      state.loaded = true;
-      state.fresh = true;
-      arrangeHome();
-      if (state.screen === 'home') {
-        renderHome(keepId);
-      } else if (state.screen === 'apps') {
-        renderHome(keepId);
-        renderApps();
-      }
-    });
+      if (seq >= appliedSeq && !state.raw.length) state.error = err;
+    }).then(redraw);
   }
 
   // ---- Clock -------------------------------------------------------------------
@@ -389,20 +474,40 @@
 
   // ---- Input -------------------------------------------------------------------
 
+  // OK and Back act once per press. Remotes don't all mark auto-repeat, so a
+  // keydown with no keyup since the last one also counts as held; the mark
+  // expires in case the keyup went to the app we just opened.
+  const held = {};
+
+  function isHeld(event) {
+    const now = Date.now();
+    const last = held[event.keyCode];
+    held[event.keyCode] = now;
+    return event.repeat || (last !== undefined && now - last < 1000);
+  }
+
+  function clearHeld() {
+    Object.keys(held).forEach(function (k) { delete held[k]; });
+  }
+
   function onKey(event) {
     const key = CH.platform.keyName(event);
     if (!key) return;
     event.preventDefault();
-    // Holding OK or Back must not launch twice or skip screens; arrows may repeat.
-    if (event.repeat && (key === 'ok' || key === 'back')) return;
+    if ((key === 'ok' || key === 'back') && isHeld(event)) return;
     if (state.screen === 'home') onHomeKey(key);
     else if (state.screen === 'settings') onSettingsKey(key);
     else if (state.screen === 'apps') onAppsKey(key);
   }
 
+  function onKeyUp(event) {
+    delete held[event.keyCode];
+  }
+
   // Coming back from another app: the app list may have changed, and timers
   // were paused while hidden.
   function onVisibility() {
+    clearHeld();
     if (doc.hidden) return;
     tick();
     refreshApps();
@@ -421,7 +526,9 @@
     }
     renderHome(null);
     doc.addEventListener('keydown', onKey);
+    doc.addEventListener('keyup', onKeyUp);
     doc.addEventListener('visibilitychange', onVisibility);
+    root.addEventListener('blur', clearHeld);
     // Let the first frame and key presses through before the slow app list.
     root.setTimeout(refreshApps, cached ? 600 : 0);
   }

@@ -123,3 +123,34 @@ test('toggle adds at the end and removes in place', () => {
   assert.deepEqual(plain(CH.apps.toggle(['a', 'b'], 'c')), ['a', 'b', 'c']);
   assert.deepEqual(plain(CH.apps.toggle(['a', 'b', 'c'], 'b')), ['a', 'c']);
 });
+
+test('mergeChosen keeps the slots of apps that are briefly missing', () => {
+  const present = { a: true, b: true, c: true };
+  // Saved: a, gone, b, c. The viewer moves c to the top.
+  assert.deepEqual(plain(CH.apps.mergeChosen(['a', 'gone', 'b', 'c'], ['c', 'a', 'b'], present, 40)), ['c', 'gone', 'a', 'b']);
+  // Removing b leaves gone where it was; adding d goes to the end.
+  assert.deepEqual(plain(CH.apps.mergeChosen(['a', 'gone', 'b'], ['a', 'd'], Object.assign({ d: true }, present), 40)), ['a', 'gone', 'd']);
+});
+
+test('mergeChosen drops missing apps first when over the cap, never visible ones', () => {
+  const present = { a: true, b: true, c: true };
+  assert.deepEqual(plain(CH.apps.mergeChosen(['x', 'a', 'y', 'b'], ['a', 'b', 'c'], present, 3)), ['a', 'b', 'c']);
+  assert.deepEqual(plain(CH.apps.mergeChosen(['x', 'a', 'y', 'b'], ['a', 'b', 'c'], present, 4)), ['x', 'a', 'b', 'c']);
+});
+
+test('migrateIds moves saved ids to the id the TV lists now, and dedupes', () => {
+  const entries = CH.apps.normalize([
+    { id: '5b8c3eb16b.BeamCTVDev', name: 'Max', show: true },
+    { id: 'com.samsung.tv.cobalt-yt', name: 'YouTube', show: true },
+    { id: 'org.tizen.netflix-app', name: 'Netflix', show: true }
+  ], CH.catalog);
+  assert.deepEqual(plain(CH.apps.migrateIds(['cj37Ni3qXM.HBONow', '9Ur5IzDKqV.TizenYouTube', 'org.tizen.netflix-app', 'gone.App'], entries, CH.catalog)),
+    ['5b8c3eb16b.BeamCTVDev', 'com.samsung.tv.cobalt-yt', 'org.tizen.netflix-app', 'gone.App']);
+  assert.equal(CH.apps.migrateIds(['org.tizen.netflix-app'], entries, CH.catalog), null, 'null when nothing changes');
+  assert.deepEqual(plain(CH.apps.migrateIds(['cj37Ni3qXM.HBONow', '5b8c3eb16b.BeamCTVDev'], entries, CH.catalog)), ['5b8c3eb16b.BeamCTVDev']);
+});
+
+test('catalogKey knows twin ids', () => {
+  assert.equal(CH.apps.catalogKey('cj37Ni3qXM.HBONow', CH.catalog), 'max');
+  assert.equal(CH.apps.catalogKey('nope.Nope', CH.catalog), null);
+});

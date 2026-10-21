@@ -39,8 +39,13 @@
   for (var i = 0; i < 30; i++) {
     APPS.many.push({ id: 'many' + ('000000' + i).slice(-6) + '.App', name: 'Channel ' + (i + 1) });
   }
-  // A dead callback, as some TVs do: ?hang=1 never answers getAppsInfo.
+  // Slow or dead TVs: ?hang=1 never answers getAppsInfo, ?delay=<ms> answers
+  // late, ?hold=1 waits for __mock.release(). ?launchHang=1 never calls back.
   var hang = params.get('hang') === '1';
+  var delay = Number(params.get('delay') || 30);
+  var hold = params.get('hold') === '1';
+  var launchHang = params.get('launchHang') === '1';
+  var held = [];
   APPS.many = APPS.typical.concat(APPS.many);
 
   var launches = [];
@@ -54,10 +59,19 @@
     launches: launches,
     apps: APPS[scenario] || APPS.typical,
     listFails: params.get('listFail') === '1',
-    // Simulates the viewer coming back to the launcher from another app.
+    // Simulates another app taking the screen, and the viewer coming back.
+    goHidden: function () {
+      Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    },
     returnFromApp: function () {
       Object.defineProperty(document, 'hidden', { value: false, configurable: true });
       document.dispatchEvent(new Event('visibilitychange'));
+    },
+    // With ?hold=1: answers every pending getAppsInfo call now.
+    release: function () {
+      var pending = held.splice(0);
+      pending.forEach(function (fn) { fn(); });
     }
   };
 
@@ -65,15 +79,21 @@
     application: {
       getAppsInfo: function (ok, fail) {
         if (hang) return;
-        setTimeout(function () {
+        function answer() {
           if (window.__mock.listFails) {
             fail({ name: 'SecurityError', message: 'Permission denied' });
             return;
           }
           ok(window.__mock.apps.map(info));
-        }, 30);
+        }
+        if (hold) held.push(answer);
+        else setTimeout(answer, delay);
       },
       launch: function (id, ok, fail) {
+        if (launchHang) {
+          launches.push(id);
+          return;
+        }
         setTimeout(function () {
           if (failList.indexOf(id) !== -1) {
             fail({ name: 'NotFoundError', message: 'No such app' });

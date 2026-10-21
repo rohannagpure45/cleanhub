@@ -1,5 +1,7 @@
 // Builds and updates the DOM. Rendering happens when data or settings change;
 // focus moves only touch classes and transforms, so arrow keys stay cheap.
+// Renders take the focused index and set it while building, before anything
+// reads layout, so a re-render never replays focus transitions.
 (function (root) {
   'use strict';
   const CH = root.CleanHub = root.CleanHub || {};
@@ -10,18 +12,33 @@
       '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>',
     check: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M12 20.5l5.5 5.5L28 15"/></svg>',
+    move: '<svg class="move-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M12 3v18M7 8l5-5 5 5M7 16l5 5 5-5"/></svg>',
     left: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
-    right: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>'
+    right: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+    up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15l7-7 7 7"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"/></svg>'
   };
 
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
     'August', 'September', 'October', 'November', 'December'];
   const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+  // Geometry the scroll maths relies on; app.css uses the same numbers.
+  const LIST_PITCH = 104;
+  const DOCK_MAX_WIDTH = 1696;
+  const DOCK_GUTTER = 20; // between the dock's edge and its clip box: room for the cues and the focus ring
+
   function h(tag, cls, text) {
     const el = doc.createElement(tag);
     if (cls) el.className = cls;
     if (text !== undefined && text !== null) el.textContent = text;
+    return el;
+  }
+
+  function svg(cls, markup) {
+    const el = h('span', cls);
+    el.innerHTML = markup;
     return el;
   }
 
@@ -50,6 +67,22 @@
       node = node.offsetParent;
     }
     el.style.backgroundPosition = (-x) + 'px ' + (-y) + 'px';
+  }
+
+  // Keeps the theme images decoded-ready, so switching themes never flashes
+  // black while a 1920x1080 JPEG loads. Holding the Image objects keeps them
+  // in the memory cache.
+  const warmed = [];
+
+  function warmThemes(themes) {
+    if (warmed.length) return;
+    themes.forEach(function (t) {
+      ['bg-' + t, 'bg-' + t + '-blur', 'thumb-' + t].forEach(function (name) {
+        const img = new root.Image();
+        img.src = 'img/' + name + '.jpg';
+        warmed.push(img);
+      });
+    });
   }
 
   // ---- Clock ---------------------------------------------------------------
@@ -87,6 +120,8 @@
 
   // ---- Tiles ---------------------------------------------------------------
 
+  // Monogram first; the TV's own icon goes on top only once it has loaded,
+  // so a transparent logo never shows the letters through it.
   function tile(entry) {
     const el = h('span', 'tile');
     el.style.backgroundColor = entry.bg;
@@ -96,7 +131,9 @@
     if (url) {
       const img = doc.createElement('img');
       img.alt = '';
-      // Keep the monogram if the TV won't hand over the icon file.
+      img.onload = function () {
+        if (img.naturalWidth) el.classList.add('has-icon');
+      };
       img.onerror = function () {
         if (img.parentNode) img.parentNode.removeChild(img);
       };
@@ -106,49 +143,65 @@
     return el;
   }
 
-  function settingsTile() {
-    const el = h('span', 'tile tile-icon');
-    el.innerHTML = ICONS.sliders;
-    return el;
-  }
-
   // ---- Home ----------------------------------------------------------------
 
   const home = {
     root: null,
-    items: [],
+    items: [], // app items, in order
+    gear: null, // Settings, fixed top right
     track: null,
     view: null,
     pill: null,
     label: null,
+    dock: null,
+    cueBefore: null,
+    cueAfter: null,
     entries: [],
-    layout: 'list'
+    layout: 'list',
+    first: 0 // first fully visible list row
   };
 
-  // entries: apps for the home screen. The last focusable item is always
-  // Settings. `note` is shown when there is nothing to list.
-  function renderHome(container, entries, settings, note) {
+  function gearEl(focused) {
+    const el = h('div', 'gear' + (focused ? ' is-focused' : ''));
+    el.setAttribute('data-settings', '');
+    el.appendChild(svg('gear-icon', ICONS.sliders));
+    el.appendChild(h('span', 'gear-label', 'Settings'));
+    return el;
+  }
+
+  // entries: apps for the home screen. Settings is a fixed button top right,
+  // reached with Right (list) or Up (dock). `focus` is { index, gear }.
+  // `note` is shown when there is nothing to list.
+  function renderHome(container, entries, settings, note, focus) {
     container.innerHTML = '';
     home.root = container;
     home.entries = entries;
     home.layout = settings.layout;
     home.items = [];
+    home.first = 0;
     container.appendChild(clockEl());
+    home.gear = gearEl(focus.gear);
+    container.appendChild(home.gear);
     if (settings.layout === 'dock') {
-      renderDock(container, entries, note);
+      renderDock(container, entries, note, focus);
     } else {
-      renderList(container, entries, note);
+      renderList(container, entries, note, focus);
     }
+    focusHome(focus.index, focus.gear, true);
   }
 
-  function renderList(container, entries, note) {
+  function cue(cls, icon) {
+    return svg('cue ' + cls, icon);
+  }
+
+  function renderList(container, entries, note, focus) {
     const view = h('div', 'list-view');
     const track = h('div', 'list-track');
     const pill = h('div', 'pill');
     track.appendChild(pill);
-    if (note) track.appendChild(h('div', 'empty list-empty', note));
+    if (note) container.appendChild(h('div', 'empty list-empty', note));
     entries.forEach(function (entry, i) {
-      const row = h('div', 'list-row');
+      const row = h('div', 'list-row' + (!focus.gear && i === focus.index ? ' is-focused' : ''));
       row.setAttribute('data-index', String(i));
       row.setAttribute('data-app', entry.id);
       row.appendChild(h('span', 'mark'));
@@ -157,31 +210,35 @@
       track.appendChild(row);
       home.items.push(row);
     });
-    const settingsRow = h('div', 'list-row list-row-settings');
-    settingsRow.setAttribute('data-index', String(entries.length));
-    settingsRow.setAttribute('data-settings', '');
-    settingsRow.appendChild(h('span', 'mark'));
-    settingsRow.appendChild(settingsTile());
-    settingsRow.appendChild(h('span', 'list-name', 'Settings'));
-    track.appendChild(settingsRow);
-    home.items.push(settingsRow);
     view.appendChild(track);
     container.appendChild(view);
+    home.cueBefore = cue('cue-list cue-up', ICONS.up);
+    home.cueAfter = cue('cue-list cue-down', ICONS.down);
+    container.appendChild(home.cueBefore);
+    container.appendChild(home.cueAfter);
     home.view = view;
     home.track = track;
     home.pill = pill;
     home.label = null;
+    home.dock = null;
+    if (!entries.length) pill.style.visibility = 'hidden';
   }
 
-  function renderDock(container, entries, note) {
+  function renderDock(container, entries, note, focus) {
     const label = h('div', 'dock-label');
     container.appendChild(label);
+    home.label = label;
+    home.pill = null;
     if (note) container.appendChild(h('div', 'empty dock-empty', note));
+    if (!entries.length) {
+      home.dock = home.view = home.track = home.cueBefore = home.cueAfter = null;
+      return;
+    }
     const dock = h('div', 'glass dock');
     const view = h('div', 'dock-view');
     const track = h('div', 'dock-track');
     entries.forEach(function (entry, i) {
-      const item = h('div', 'dock-item');
+      const item = h('div', 'dock-item' + (!focus.gear && i === focus.index ? ' is-focused' : ''));
       item.setAttribute('data-index', String(i));
       item.setAttribute('data-app', entry.id);
       item.appendChild(tile(entry));
@@ -189,23 +246,23 @@
       track.appendChild(item);
       home.items.push(item);
     });
-    if (entries.length) track.appendChild(h('span', 'dock-sep'));
-    const gear = h('div', 'dock-item dock-item-settings');
-    gear.setAttribute('data-index', String(entries.length));
-    gear.setAttribute('data-settings', '');
-    gear.appendChild(settingsTile());
-    gear.appendChild(h('span', 'dock-ring'));
-    track.appendChild(gear);
-    home.items.push(gear);
     view.appendChild(track);
     dock.appendChild(view);
+    home.cueBefore = cue('cue-dock cue-left', ICONS.left);
+    home.cueAfter = cue('cue-dock cue-right', ICONS.right);
+    dock.appendChild(home.cueBefore);
+    dock.appendChild(home.cueAfter);
     container.appendChild(dock);
+    // Size the dock to its apps (centred), up to the safe width.
+    const width = Math.min(DOCK_MAX_WIDTH, track.scrollWidth + 2 * DOCK_GUTTER);
+    dock.style.width = width + 'px';
+    dock.style.left = Math.round((1920 - width) / 2) + 'px';
+    view.style.width = (width - 2 * DOCK_GUTTER) + 'px';
+    label.style.left = (Math.round((1920 - width) / 2) + 2 * DOCK_GUTTER) + 'px';
     alignGlass(dock);
+    home.dock = dock;
     home.view = view;
     home.track = track;
-    home.pill = null;
-    home.label = label;
-    if (note) label.style.visibility = 'hidden';
   }
 
   // Sets a transform, skipping the transition when `instant` (after a re-render,
@@ -228,23 +285,46 @@
     return Math.max(0, Math.min(maxOffset, centred));
   }
 
-  function focusHome(index, instant) {
+  // List scrolling by whole rows: the window moves only when focus would reach
+  // its first or last row, so no row is ever cut in half.
+  function listFirst(first, index, count, visible) {
+    const maxFirst = Math.max(0, count - visible);
+    let f = Math.min(first, index - 1);
+    f = Math.max(f, index - visible + 2);
+    return Math.max(0, Math.min(maxFirst, f));
+  }
+
+  function showCues(before, after) {
+    if (home.cueBefore) home.cueBefore.classList.toggle('is-shown', before);
+    if (home.cueAfter) home.cueAfter.classList.toggle('is-shown', after);
+  }
+
+  // index: the remembered app; gear: Settings has focus instead.
+  function focusHome(index, gear, instant) {
+    const onGear = gear || !home.items.length;
     home.items.forEach(function (el, i) {
-      el.classList.toggle('is-focused', i === index);
+      el.classList.toggle('is-focused', !onGear && i === index);
     });
+    home.gear.classList.toggle('is-focused', onGear);
     const el = home.items[index];
-    if (!el) return;
     if (home.layout === 'dock') {
-      const isSettings = index === home.entries.length;
-      home.label.textContent = isSettings ? 'Settings' : home.entries[index].name;
+      if (home.label) home.label.textContent = onGear || !el ? '' : home.entries[index].name;
+      if (!el) return;
       const offset = scrollOffset(el.offsetLeft, el.offsetWidth, home.view.offsetWidth, home.track.scrollWidth);
       place(home.track, 'translateX(' + (-offset) + 'px)', instant);
-    } else {
-      home.pill.style.height = el.offsetHeight + 'px';
-      place(home.pill, 'translateY(' + el.offsetTop + 'px)', instant);
-      const offset = scrollOffset(el.offsetTop, el.offsetHeight, home.view.offsetHeight, home.track.offsetHeight);
-      place(home.track, 'translateY(' + (-offset) + 'px)', instant);
+      showCues(offset > 0.5, offset < home.track.scrollWidth - home.view.offsetWidth - 0.5);
+      return;
     }
+    if (!el) {
+      showCues(false, false);
+      return;
+    }
+    home.pill.style.visibility = onGear ? 'hidden' : '';
+    place(home.pill, 'translateY(' + el.offsetTop + 'px)', instant);
+    const visible = Math.floor(home.view.offsetHeight / LIST_PITCH);
+    home.first = listFirst(home.first, index, home.items.length, visible);
+    place(home.track, 'translateY(' + (-home.first * LIST_PITCH) + 'px)', instant);
+    showCues(home.first > 0, home.first + visible < home.items.length);
   }
 
   function pressHome(index) {
@@ -265,7 +345,13 @@
     rows: [],
     track: null,
     view: null,
-    pill: null
+    pill: null,
+    hint: null,
+    cueBefore: null,
+    cueAfter: null,
+    title: '',
+    offset: 0, // current scroll of the sheet's rows
+    hintSaved: [] // the hint's keys while a message stands in for them
   };
 
   function fillHint(el, parts) {
@@ -278,13 +364,12 @@
     return el;
   }
 
-  function hint(parts) {
-    return fillHint(h('div', 'sheet-hint'), parts);
-  }
-
-  function sheetFrame(title, sub) {
+  // A re-render of the same sheet keeps its scroll; a different sheet starts at the top.
+  function sheetFrame(title, sub, keys) {
     const el = sheet.el;
     el.innerHTML = '';
+    if (sheet.title !== title) sheet.offset = 0;
+    sheet.title = title;
     const inner = h('div', 'sheet-inner');
     inner.appendChild(h('h1', 'sheet-title', title));
     if (sub) inner.appendChild(h('div', 'sheet-sub', sub));
@@ -294,6 +379,12 @@
     track.appendChild(pill);
     view.appendChild(track);
     inner.appendChild(view);
+    sheet.cueBefore = svg('cue cue-sheet cue-up', ICONS.up);
+    sheet.cueAfter = svg('cue cue-sheet cue-down', ICONS.down);
+    inner.appendChild(sheet.cueBefore);
+    inner.appendChild(sheet.cueAfter);
+    sheet.hint = fillHint(h('div', 'sheet-hint'), keys);
+    inner.appendChild(sheet.hint);
     el.appendChild(inner);
     sheet.rows = [];
     sheet.view = view;
@@ -335,70 +426,129 @@
     return row;
   }
 
-  function addRow(row) {
+  function addRow(row, focused) {
+    if (focused) row.classList.add('is-focused');
     sheet.track.appendChild(row);
     sheet.rows.push(row);
   }
 
   // Main settings. `ctx` carries counts and the reset confirmation state.
-  function renderSettings(settings, ctx) {
-    const inner = sheetFrame('Settings', ctx.version ? 'Clean Hub ' + ctx.version : '');
+  function renderSettings(settings, ctx, focusIndex) {
+    sheetFrame('Settings', ctx.version ? 'Clean Hub ' + ctx.version : '',
+      [['◀ ▶', 'Change'], ['OK', 'Open'], ['Back', 'Close']]);
     const count = ctx.homeCount === 1 ? '1 app' : ctx.homeCount + ' apps';
-    addRow(actionRow('apps', 'Apps on Home', count));
-    addRow(optionRow('layout', 'Layout', settings));
-    addRow(optionRow('theme', 'Background', settings));
-    addRow(optionRow('font', 'Font', settings));
-    addRow(optionRow('focus', 'Focus style', settings));
-    addRow(optionRow('icons', 'Icons in list', settings));
-    addRow(optionRow('clock', 'Clock', settings));
-    addRow(actionRow('reset', ctx.confirmReset ? 'Press OK again to reset everything' : 'Reset to defaults', '', true));
-    inner.appendChild(hint([['◀ ▶', 'Change'], ['OK', 'Open'], ['Back', 'Close']]));
+    const rows = [
+      actionRow('apps', 'Apps on Home', count),
+      optionRow('layout', 'Layout', settings),
+      optionRow('theme', 'Background', settings),
+      optionRow('font', 'Font', settings),
+      optionRow('focus', 'Focus style', settings),
+      optionRow('icons', 'Icons in list', settings),
+      optionRow('clock', 'Clock', settings),
+      actionRow('reset', ctx.confirmReset ? 'Press OK again to reset everything' : 'Reset to defaults', '', true)
+    ];
+    rows.forEach(function (row, i) { addRow(row, i === focusIndex); });
     alignGlass(sheet.el);
+    focusSheet(focusIndex, true);
   }
 
-  function appsHint(rows, moving, focusIndex) {
+  function appsHint(rows, moving, focusIndex, full) {
     const focused = rows[focusIndex];
     if (moving !== -1) return [['▲ ▼', 'Move'], ['OK', 'Done'], ['Back', 'Cancel']];
     if (!focused) return [['OK', 'Switch'], ['Back', 'Settings']];
     if (focused.on) return [['OK', 'Move'], ['◀', 'Remove'], ['Back', 'Settings']];
+    if (full) return [['Back', 'Settings']];
     return [['OK', 'Add to Home'], ['Back', 'Settings']];
   }
 
+  const appsCtx = { rows: [], moving: -1, full: false };
+
   // Focus moved in the apps sheet: only the hint line depends on it.
-  function updateAppsHint(rows, moving, focusIndex) {
-    const el = sheet.el.querySelector('.sheet-hint');
-    if (el) fillHint(el, appsHint(rows, moving, focusIndex));
+  function updateAppsHint(focusIndex) {
+    if (sheet.hint) fillHint(sheet.hint, appsHint(appsCtx.rows, appsCtx.moving, focusIndex, appsCtx.full));
   }
 
   // rows: [{ entry, on, order }]; moving: index of the row being moved, or -1.
   // The last focusable row switches between apps only and every TV entry.
-  function renderAppsSheet(rows, moving, focusIndex, everything) {
+  // opts: { everything, failed, full }.
+  function renderAppsSheet(rows, moving, focusIndex, opts) {
     const onCount = rows.filter(function (r) { return r.on; }).length;
-    const inner = sheetFrame('Apps on Home', onCount + ' on Home');
+    appsCtx.rows = rows;
+    appsCtx.moving = moving;
+    appsCtx.full = !!opts.full;
+    sheetFrame('Apps on Home', onCount + ' on Home' + (opts.full ? ' · full' : ''),
+      appsHint(rows, moving, focusIndex, opts.full));
+    sheet.pill.className = 'pill' + (moving !== -1 ? ' is-moving' : '');
     let lastOn = null;
     rows.forEach(function (r, i) {
       if (lastOn !== r.on) {
-        sheet.track.appendChild(h('div', 'sheet-section', r.on ? 'On Home' : (everything ? 'Everything the TV lists' : 'Not on Home')));
+        sheet.track.appendChild(h('div', 'sheet-section', r.on ? 'On Home' : (opts.everything ? 'Everything the TV lists' : 'Not on Home')));
         lastOn = r.on;
       }
       const row = h('div', 'sheet-row' + (r.on ? ' is-on' : '') + (i === moving ? ' is-moving' : ''));
       row.setAttribute('data-app', r.entry.id);
-      const check = h('span', 'check');
-      check.innerHTML = ICONS.check;
-      row.appendChild(check);
+      row.appendChild(svg('check', ICONS.check));
       row.appendChild(tile(r.entry));
       row.appendChild(h('span', 'sheet-label', r.entry.name));
-      row.appendChild(h('span', 'order', r.on ? (i === moving ? '↕' : String(r.order + 1)) : ''));
-      addRow(row);
+      row.appendChild(orderEl(r, i === moving));
+      addRow(row, i === focusIndex);
     });
     if (!rows.length) {
-      sheet.track.appendChild(h('div', 'empty sheet-section', 'No apps found on this TV.'));
+      sheet.track.appendChild(h('div', 'empty sheet-empty',
+        opts.failed ? 'Couldn’t read this TV’s app list. Try again in a moment.' : 'No apps found on this TV.'));
     }
     sheet.track.appendChild(h('div', 'sheet-section', 'Missing an app?'));
-    const toggle = actionRow('everything', everything ? 'Show only recognised apps' : 'Show everything the TV lists', '');
-    addRow(toggle);
-    inner.appendChild(hint(appsHint(rows, moving, focusIndex)));
+    addRow(actionRow('everything', opts.everything ? 'Show only recognised apps' : 'Show everything the TV lists', ''),
+      focusIndex === rows.length);
     alignGlass(sheet.el);
+    focusSheet(focusIndex, true);
+  }
+
+  function orderEl(r, moving) {
+    if (moving) return svg('order', ICONS.move);
+    return h('span', 'order', r.on ? String(r.order + 1) : '');
+  }
+
+  // One step of a move: swap the row with its neighbour in place instead of
+  // rebuilding the sheet (which is slow with "Show everything" on a TV).
+  function moveAppsRow(from, to) {
+    const el = sheet.rows[from];
+    const other = sheet.rows[to];
+    if (!el || !other || from === to) return;
+    if (to < from) sheet.track.insertBefore(el, other);
+    else sheet.track.insertBefore(el, other.nextSibling);
+    sheet.rows.splice(from, 1);
+    sheet.rows.splice(to, 0, el);
+    const r = appsCtx.rows.splice(from, 1)[0];
+    appsCtx.rows.splice(to, 0, r);
+    appsCtx.moving = to;
+    const lo = Math.min(from, to);
+    const hi = Math.max(from, to);
+    for (let i = lo; i <= hi; i++) {
+      if (i !== to) sheet.rows[i].querySelector('.order').textContent = String(i + 1);
+    }
+    focusSheet(to);
+  }
+
+  // Scrolls so the focused row and one neighbour are visible, then snaps the
+  // window to the top of a row or section, so nothing sits half-cut under the
+  // title.
+  function sheetOffset(el) {
+    const view = sheet.view.offsetHeight;
+    const max = Math.max(0, sheet.track.offsetHeight - view);
+    const current = sheet.offset || 0;
+    const margin = el.offsetHeight;
+    let offset = current;
+    if (el.offsetTop - margin < offset) offset = el.offsetTop - margin;
+    if (el.offsetTop + el.offsetHeight + margin > offset + view) offset = el.offsetTop + el.offsetHeight + margin - view;
+    offset = Math.max(0, Math.min(max, offset));
+    let snapped = 0;
+    const kids = sheet.track.children;
+    for (let i = 0; i < kids.length; i++) {
+      const top = kids[i].offsetTop;
+      if (kids[i] !== sheet.pill && top <= offset + 0.5 && top > snapped) snapped = top;
+    }
+    return snapped;
   }
 
   function focusSheet(index, instant) {
@@ -410,8 +560,11 @@
     if (!el) return;
     sheet.pill.style.height = el.offsetHeight + 'px';
     place(sheet.pill, 'translateY(' + el.offsetTop + 'px)', instant);
-    const offset = scrollOffset(el.offsetTop, el.offsetHeight, sheet.view.offsetHeight, sheet.track.offsetHeight);
-    place(sheet.track, 'translateY(' + (-offset) + 'px)', instant);
+    sheet.offset = sheetOffset(el);
+    place(sheet.track, 'translateY(' + (-sheet.offset) + 'px)', instant);
+    const max = sheet.track.offsetHeight - sheet.view.offsetHeight;
+    sheet.cueBefore.classList.toggle('is-shown', sheet.offset > 0.5);
+    sheet.cueAfter.classList.toggle('is-shown', sheet.offset < max - 0.5);
   }
 
   function openSheet(open) {
@@ -419,16 +572,34 @@
     dimHome(open);
   }
 
-  // ---- Toast -----------------------------------------------------------------
+  // ---- Messages --------------------------------------------------------------
 
   let toastTimer = null;
 
+  // A short message. With the sheet open it replaces the sheet's hint line
+  // (the toast would sit on top of it); otherwise it shows as a toast.
   function toast(message) {
+    root.clearTimeout(toastTimer);
+    if (sheet.el.classList.contains('is-open') && sheet.hint) {
+      const hintEl = sheet.hint;
+      const showing = hintEl.firstChild && hintEl.firstChild.className === 'hint-message';
+      // A second message in a row restores the original keys, not the first message.
+      const saved = showing ? sheet.hintSaved : Array.prototype.slice.call(hintEl.childNodes);
+      sheet.hintSaved = saved;
+      hintEl.innerHTML = '';
+      const msg = h('span', 'hint-message', message);
+      hintEl.appendChild(msg);
+      toastTimer = root.setTimeout(function () {
+        if (msg.parentNode !== hintEl) return; // the hint was redrawn meanwhile
+        hintEl.innerHTML = '';
+        saved.forEach(function (n) { hintEl.appendChild(n); });
+      }, 3200);
+      return;
+    }
     const el = doc.getElementById('toast');
     el.innerHTML = '';
     el.appendChild(h('span', null, message));
     el.classList.add('is-shown');
-    root.clearTimeout(toastTimer);
     toastTimer = root.setTimeout(function () {
       el.classList.remove('is-shown');
     }, 3200);
@@ -441,6 +612,7 @@
   CH.ui = {
     init: init,
     applyLook: applyLook,
+    warmThemes: warmThemes,
     formatClock: formatClock,
     updateClock: updateClock,
     renderHome: renderHome,
@@ -449,9 +621,11 @@
     renderSettings: renderSettings,
     renderAppsSheet: renderAppsSheet,
     updateAppsHint: updateAppsHint,
+    moveAppsRow: moveAppsRow,
     focusSheet: focusSheet,
     openSheet: openSheet,
     toast: toast,
-    scrollOffset: scrollOffset
+    scrollOffset: scrollOffset,
+    listFirst: listFirst
   };
 })(typeof window !== 'undefined' ? window : globalThis);
