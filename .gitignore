@@ -4,3 +4,8 @@ dist/
 *.wgt
 .DS_Store
 test-results/
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
