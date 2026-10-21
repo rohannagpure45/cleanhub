@@ -59,6 +59,7 @@
     launches: launches,
     sources: [],
     hidden: 0,
+    inputQueries: 0,
     apps: APPS[scenario] || APPS.typical,
     listFails: params.get('listFail') === '1',
     // Simulates another app taking the screen, and the viewer coming back.
@@ -117,11 +118,12 @@
       getPropertyValue: function (prop, ok, fail) {
         setTimeout(function () {
           if (prop !== 'VIDEOSOURCE') { fail({ name: 'NotSupportedError', message: prop }); return; }
+          window.__mock.inputQueries++;
           ok({
             connected: [{ type: 'TV', number: 1 }, { type: 'HDMI', number: 2 }, { type: 'HDMI', number: 4 }],
             disconnected: [{ type: 'HDMI', number: 1 }, { type: 'HDMI', number: 3 }]
           });
-        }, 10);
+        }, Number(params.get('inputDelay') || 10)); // the QN85B takes ~3300 ms
       }
     },
     tvwindow: {

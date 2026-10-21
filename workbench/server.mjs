@@ -45,6 +45,12 @@ export function start(port = PORT) {
         res.end(await readFile(join(ROOT, 'workbench/mock-tizen.js')));
         return;
       }
+      // Samsung's product API exists only on the TV; stand in for it.
+      if (path === '/$WEBAPIS/webapis/webapis.js') {
+        res.writeHead(200, { 'content-type': TYPES['.js'] });
+        res.end(await readFile(join(ROOT, 'workbench/mock-webapis.js')));
+        return;
+      }
       if (path === '/frame') {
         res.writeHead(200, { 'content-type': TYPES['.html'] });
         res.end(await readFile(join(ROOT, 'workbench/frame.html')));

@@ -690,9 +690,18 @@ test('Fire TV on Home switches the TV to its HDMI input and steps aside', async 
   await press('ArrowDown');
   assert.equal(await focusedHome(), 'Fire TV');
   await press('Enter');
+  await page.waitForFunction(() => window.__mock.launches.length === 1);
+  assert.deepEqual(await page.evaluate(() => window.__mock.sources), ['HDMI 4']);
+  assert.deepEqual(await page.evaluate(() => window.__mock.launches), ['org.tizen.tv-viewer'],
+    'hands the screen to Samsung\'s TV viewer, which shows the input full screen');
+  assert.deepEqual(errors, []);
+});
+
+test('if the TV viewer will not open, Clean Hub still steps aside', async () => {
+  await open('?fail=org.tizen.tv-viewer', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
+  await press('Enter');
   await page.waitForFunction(() => window.__mock.hidden === 1);
   assert.deepEqual(await page.evaluate(() => window.__mock.sources), ['HDMI 4']);
-  assert.deepEqual(errors, []);
 });
 
 test('Fire TV warns about an empty input and reports a refused switch', async () => {
@@ -715,4 +724,38 @@ test('the Fire TV item comes and goes with its setting, keeping focus on the sam
   assert.equal((await homeNames())[0], 'Fire TV');
   await press('ArrowLeft');
   assert.equal(await focusedHome(), 'YouTube');
+});
+
+test('the slow input query happens ahead of time, so OK on Fire TV switches at once', async () => {
+  await page.clock.install();
+  await open('?inputDelay=3300', { settings: S({ input: 'hdmi4', ambient: 'off' }), wait: false });
+  await page.waitForFunction(() => window.CleanHub && window.CleanHub.main);
+  await page.clock.runFor(4000); // app list + the 3.3 s input query, in the background
+  assert.equal(await page.evaluate(() => window.__mock.inputQueries), 1);
+  await press('Enter');
+  await page.clock.runFor(100);
+  assert.deepEqual(await page.evaluate(() => window.__mock.sources), ['HDMI 4'], 'switched within 0.1 s of OK');
+  assert.equal(await page.evaluate(() => window.__mock.inputQueries), 1, 'no second query');
+});
+
+test('Ambient keeps Samsung\'s screensaver off while it shows, and gives it back after', async () => {
+  await openAmbient();
+  assert.deepEqual(await page.evaluate(() => window.__screenSaver), [0]);
+  await page.evaluate(() => window.__mock.goHidden());
+  await page.evaluate(() => window.__mock.returnFromApp());
+  await press('Escape');
+  assert.deepEqual(await page.evaluate(() => window.__screenSaver), [0, 1, 0, 1]);
+});
+
+test('a stalled track is skipped by the watchdog', async () => {
+  await page.clock.install();
+  await openAmbient();
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  // Freeze the position, as a stuck decoder would.
+  await page.evaluate(() => {
+    const a = document.querySelector('audio') || [...document.querySelectorAll('*')].find(() => false);
+    Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', { get() { return 42; }, set() {}, configurable: true });
+  });
+  await page.clock.runFor(61000);
+  assert.equal((await AMB()).index, 1, 'moved on to the next track');
 });

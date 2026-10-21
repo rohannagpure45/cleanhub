@@ -1,5 +1,6 @@
 // The Ambient screen's music: the bundled playlist (music/playlist.js) on a
-// loop through one <audio> element, which the TV decodes in hardware.
+// loop through one <audio> element (Samsung's documented pattern: switch src
+// on 'ended'). A watchdog moves on if playback ever stalls, since it runs all day.
 (function (root) {
   'use strict';
   const CH = root.CleanHub = root.CleanHub || {};
@@ -12,8 +13,28 @@
     blocked: false, // the browser refused to start without a key press
     errors: 0, // failed tracks in a row
     onChange: null,
-    retry: null
+    retry: null,
+    watch: null,
+    lastTime: -1
   };
+
+  const WATCH_MS = 30000;
+
+  // Every 30 s while music should be playing: if the position hasn't moved,
+  // skip to the next track.
+  function watchdog() {
+    root.clearTimeout(p.watch);
+    p.watch = root.setTimeout(function () {
+      const a = p.audio;
+      if (!p.wanted || !a || a.paused) return;
+      if (a.currentTime === p.lastTime) {
+        step(1);
+      } else {
+        p.lastTime = a.currentTime;
+      }
+      watchdog();
+    }, WATCH_MS);
+  }
 
   function notify() {
     if (p.onChange) p.onChange(state());
@@ -39,6 +60,7 @@
     a.addEventListener('playing', function () {
       p.errors = 0;
       p.blocked = false;
+      p.lastTime = -1;
       notify();
     });
     a.addEventListener('pause', notify);
@@ -68,6 +90,7 @@
     const a = audio();
     if (!a.src) load(p.index);
     const started = a.play();
+    watchdog();
     if (started && typeof started.catch === 'function') {
       started.catch(function (e) {
         // Autoplay refused (desktop browsers want a key press first).
@@ -81,6 +104,7 @@
 
   function pause() {
     p.wanted = false;
+    root.clearTimeout(p.watch);
     if (p.audio) p.audio.pause();
     notify();
   }
@@ -118,6 +142,7 @@
     // The app went to the background: stop sound but remember the wish.
     suspend: function () {
       root.clearTimeout(p.retry);
+      root.clearTimeout(p.watch);
       if (p.audio) p.audio.pause();
     },
     resume: function () {

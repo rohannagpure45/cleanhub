@@ -151,6 +151,21 @@
     }
   }
 
+  // Samsung's screensaver kicks in over a still picture after a while
+  // without remote input; Ambient turns it off while it shows. Quietly does
+  // nothing where webapis.js isn't available.
+  function screenSaver(on) {
+    try {
+      const ac = root.webapis && root.webapis.appcommon;
+      if (!ac || !ac.setScreenSaver) return false;
+      const states = ac.AppCommonScreenSaverState;
+      ac.setScreenSaver(on ? states.SCREEN_SAVER_ON : states.SCREEN_SAVER_OFF, function () {}, function () {});
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Tizen hands back plain filesystem paths for icons.
   function iconUrl(path) {
     if (!path) return null;
@@ -181,6 +196,7 @@
     listInputs: listInputs,
     setSource: setSource,
     hide: hide,
+    screenSaver: screenSaver,
     iconUrl: iconUrl,
     now: now
   };

@@ -249,6 +249,7 @@
     CH.ui.applyLook(next);
     if (relayout) renderHome(remembered ? remembered.id : null);
     if (next.music !== prev.music && next.music === 'off') CH.player.pause();
+    if (next.input !== prev.input) prefetchInputs();
   }
 
   function onSettingsKey(key) {
@@ -453,23 +454,46 @@
 
   // ---- Fire TV input ------------------------------------------------------------
 
-  // Points the TV at the chosen HDMI input, then steps aside so the picture
-  // and the remote belong to the device there. Clean Hub stays running.
+  // Samsung's full-screen viewer for the TV's main input. Only hiding Clean
+  // Hub would leave Smart Hub on top of the picture (seen on the QN85B).
+  const TV_VIEWER = 'org.tizen.tv-viewer';
+
+  // Asking the TV for its inputs takes over 3 s on the QN85B, and setSource
+  // only accepts the TV's own input objects, so the list is fetched ahead of
+  // time (at start and whenever Clean Hub comes back) and OK switches at once.
+  let inputs = null;
+
+  function prefetchInputs() {
+    if (state.settings.input === 'off') return Promise.resolve(null);
+    return CH.platform.listInputs().then(function (found) {
+      inputs = found;
+      return found;
+    }, function () {
+      return null;
+    });
+  }
+
+  // Points the TV at the chosen HDMI input, then hands the screen to the TV
+  // viewer so the picture and the remote belong to the device there. Clean
+  // Hub stays running in the background.
   function showInput() {
     const number = Number(state.settings.input.replace('hdmi', ''));
     const label = CH.store.label('input', state.settings.input);
     CH.ui.pressHome(state.homeIndex);
-    CH.platform.listInputs().then(function (inputs) {
-      const all = inputs.connected.concat(inputs.disconnected);
+    (inputs ? Promise.resolve(inputs) : CH.platform.listInputs()).then(function (found) {
+      inputs = found;
+      const all = found.connected.concat(found.disconnected);
       let source = null;
       all.forEach(function (s) {
         if (s.type === 'HDMI' && Number(s.number) === number) source = s;
       });
       if (!source) throw new Error(label + ' isn’t on this TV');
-      if (inputs.connected.indexOf(source) === -1) CH.ui.toast('Nothing seems to be connected to ' + label);
+      if (found.connected.indexOf(source) === -1) CH.ui.toast('Nothing seems to be connected to ' + label);
       return CH.platform.setSource(source);
     }).then(function () {
-      CH.platform.hide();
+      return CH.platform.launch(TV_VIEWER).catch(function () {
+        CH.platform.hide();
+      });
     }).catch(function () {
       CH.ui.toast('Couldn’t switch to ' + label);
     });
@@ -528,6 +552,7 @@
   function openAmbient() {
     state.screen = 'ambient';
     CH.ui.openAmbient(true);
+    CH.platform.screenSaver(false);
     CH.ui.updateAmbient(CH.player.state(), state.settings.music === 'on');
     if (state.settings.music === 'on') CH.player.play();
     saveAmbient(true);
@@ -544,6 +569,7 @@
     CH.ui.showAmbientControls(false);
     CH.player.pause();
     CH.ui.openAmbient(false);
+    CH.platform.screenSaver(true);
     saveAmbient(false);
     CH.ui.focusHome(state.homeIndex, onGear());
   }
@@ -672,11 +698,14 @@
     clearHeld();
     if (doc.hidden) {
       CH.player.suspend();
+      if (state.screen === 'ambient') CH.platform.screenSaver(true);
       return;
     }
     tick();
     refreshApps();
+    prefetchInputs();
     if (state.screen === 'ambient') {
+      CH.platform.screenSaver(false);
       CH.player.resume();
       scheduleMove();
     }
@@ -703,7 +732,9 @@
     doc.addEventListener('visibilitychange', onVisibility);
     root.addEventListener('blur', clearHeld);
     // Let the first frame and key presses through before the slow app list.
-    root.setTimeout(refreshApps, cached ? 600 : 0);
+    root.setTimeout(function () {
+      refreshApps().then(prefetchInputs);
+    }, cached ? 600 : 0);
   }
 
   CH.main = { state: state, start: start, version: VERSION };

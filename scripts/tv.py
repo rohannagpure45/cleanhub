@@ -7,6 +7,7 @@ Developer Mode, from this Mac. Standard library only.
   python3 scripts/tv.py doctor  --tv 192.168.1.50      # is the TV ready?
   python3 scripts/tv.py install --tv 192.168.1.50      # build, sign, install, open
   python3 scripts/tv.py open | uninstall | ids         # (remembers the last --tv)
+  python3 scripts/tv.py debug                          # relaunch for scripts/tv-inspect.mjs
 
 Signing: 2022 TVs (Tizen 6.5) accept a plain Tizen developer certificate paired
 with the SDK's "old" public distributor certificate, so no Samsung account is
@@ -268,9 +269,14 @@ def sdb(tv, *args, timeout=120):
 
 
 def connect(tv):
-    code, out = run([SDB, "connect", f"{tv}:{SDB_PORT}"], timeout=30)
-    if "connected" not in out.lower():
-        fail(f"Couldn't connect to the TV over sdb:\n{out.strip()}\n"
+    """A fresh sdb connection, confirmed in `sdb devices`. A TV restart or a
+    Mac network change leaves a stale 'already connected' entry behind."""
+    serial = f"{tv}:{SDB_PORT}"
+    run([SDB, "disconnect", serial], timeout=15)
+    _, out = run([SDB, "connect", serial], timeout=30)
+    _, devices = run([SDB, "devices"], timeout=15)
+    if not re.search(rf"^{re.escape(serial)}\s+device\b", devices, re.M):
+        fail(f"Couldn't connect to the TV over sdb:\n{out.strip()}\n{devices.strip()}\n"
              "Run doctor to see why (usually Developer Mode, the Host PC IP, or a TV that needs a full restart).")
 
 
@@ -582,6 +588,39 @@ def cmd_uninstall(args):
     say("✓ Clean Hub removed from the TV.")
 
 
+def cmd_debug(args):
+    """Relaunches Clean Hub in debug mode and saves its DevTools endpoint for
+    scripts/tv-inspect.mjs. Debug launches only start from a stopped app."""
+    tv = tv_address(args)
+    app_id, _ = manifest()
+    need_sdk()
+    connect(tv)
+    sdb(tv, "shell", "0", "was_kill", app_id.split(".")[0], timeout=30)
+    proc = subprocess.Popen([str(SDB), "-s", f"{tv}:{SDB_PORT}", "shell", "0", "debug", app_id],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    port = None
+    deadline = time.time() + 40
+    try:
+        while time.time() < deadline:
+            ready, _, _ = select.select([proc.stdout], [], [], 1)
+            if not ready:
+                continue
+            line = proc.stdout.readline()
+            if not line:
+                break
+            m = re.search(r"port:\s*(\d+)", line)
+            if m:
+                port = int(m.group(1))
+                break
+    finally:
+        proc.terminate()
+    if not port:
+        fail("The TV didn't start Clean Hub in debug mode. Is Developer Mode still on for this Mac?")
+    save_json("debug.json", {"host": tv, "port": port})
+    say(f"✓ Clean Hub is running in debug mode; DevTools at http://{tv}:{port}/json")
+    say("  Try: node scripts/tv-inspect.mjs eval 'CleanHub.main.state.screen'")
+
+
 def cmd_ids(args):
     """Prints the app ids the TV reports, to tune catalog.js."""
     tv = tv_address(args)
@@ -607,13 +646,15 @@ def main():
     sub.add_parser("package", help="build and sign dist/CleanHub.wgt")
     for name, text in (("doctor", "check that the TV is ready"), ("install", "build, sign, install and open"),
                        ("open", "open Clean Hub on the TV"), ("uninstall", "remove Clean Hub from the TV"),
-                       ("ids", "list the app ids the TV reports")):
+                       ("ids", "list the app ids the TV reports"),
+                       ("debug", "relaunch Clean Hub in debug mode for tv-inspect.mjs")):
         p = sub.add_parser(name, help=text)
         p.add_argument("--tv", help="the TV's IP address (remembered)")
     args = parser.parse_args()
     {
         "install-sdk": cmd_install_sdk, "setup": cmd_setup, "package": cmd_package, "doctor": cmd_doctor,
         "install": cmd_install, "open": cmd_open, "uninstall": cmd_uninstall, "ids": cmd_ids,
+        "debug": cmd_debug,
     }[args.command](args)
 
 
