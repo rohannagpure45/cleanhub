@@ -190,41 +190,41 @@
         "src": "img/wall/fireflies/flies0.webp",
         "x": 0,
         "y": 432,
-        "w": 3840,
+        "w": 1920,
         "h": 618,
-        "anim": "wall-drift-1920 900s linear -564.7705608007735s infinite, wall-blink 4.7s ease-out -3.3s infinite"
+        "anim": "wall-blink 4.7s ease-out -2.9s infinite"
       },
       {
         "src": "img/wall/fireflies/flies1.webp",
         "x": 0,
         "y": 432,
-        "w": 3840,
+        "w": 1920,
         "h": 618,
-        "anim": "wall-drift-1920 1150s linear -949.7036800611169s infinite, wall-blink 5.9s ease-out -0.8s infinite"
+        "anim": "wall-blink 5.9s ease-out -5.4s infinite"
       },
       {
         "src": "img/wall/fireflies/flies2.webp",
         "x": 0,
         "y": 432,
-        "w": 3840,
+        "w": 1920,
         "h": 618,
-        "anim": "wall-drift-1920 760s linear -175.5995010051965s infinite, wall-blink 7.3s ease-out -2.6s infinite"
+        "anim": "wall-blink 7.3s ease-out -3.8s infinite"
       },
       {
         "src": "img/wall/fireflies/flies3.webp",
         "x": 0,
         "y": 432,
-        "w": 3840,
+        "w": 1920,
         "h": 618,
-        "anim": "wall-drift-1920 1300s linear -1142.8437515210069s infinite, wall-blink 8.6s ease-out -8.2s infinite"
+        "anim": "wall-blink 8.6s ease-out -4.6s infinite"
       },
       {
         "src": "img/wall/fireflies/flies4.webp",
         "x": 0,
         "y": 432,
-        "w": 3840,
+        "w": 1920,
         "h": 618,
-        "anim": "wall-drift-1920 1000s linear -496.33006106097264s infinite, wall-blink 11.2s ease-out -2.0s infinite"
+        "anim": "wall-blink 11.2s ease-out -0.7s infinite"
       }
     ],
     "sunset": [

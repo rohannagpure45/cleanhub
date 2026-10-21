@@ -1216,7 +1216,7 @@ def lighthouse():
 def fireflies():
     """A meadow just after dusk: the last light low in the sky behind tall
     grass and an old oak. Fireflies blink in the grass, each set to its own
-    rhythm, and wander slowly along."""
+    rhythm."""
     n = Noise(101)
     rng = np.random.default_rng(101)
     img = vertical([(0.0, "#000000"), (0.30, "#000104"), (0.55, "#040C1A"), (0.70, "#0B1E31"),
@@ -1289,19 +1289,19 @@ def fireflies():
     sil = np.maximum(sil, grass)
     img = over(img, rgb("#000000"), sil)
     scene = Scene("fireflies", img, dark=True)
-    # Fireflies: five sets, each a seamless tile wandering slowly to the
-    # right, each blinking on its own beat (app.css wall-blink).
+    # Fireflies: five sets, each blinking on its own beat (app.css
+    # wall-blink). They stay put: on the TV, five drifting double-width
+    # tiles were too much for the compositor.
     f0, f1 = int(0.40 * H), H - 30
-    for k, (beat, wander, still) in enumerate(((4.7, 900, 0.9), (5.9, 1150, 0.0), (7.3, 760, 0.6),
-                                                (8.6, 1300, 0.0), (11.2, 1000, 0.3))):
+    for k, (beat, still) in enumerate(((4.7, 0.9), (5.9, 0.0), (7.3, 0.6), (8.6, 0.0), (11.2, 0.3))):
         dots = []
         for _ in range(13):
             y = f0 + (f1 - f0) * rng.beta(2.6, 1.4)
             near = (y - f0) / (f1 - f0)
-            dots.append((rng.uniform(0, TILE), y - f0, 1.4 + 1.6 * near, rng.uniform(0.6, 1.0)))
-        flies = soft_dots((f1 - f0, TILE), dots, rgb("#D6F46A"), wrap_x=True)
-        anim = drift(wander, rng.uniform(0, wander)) + f", wall-blink {beat}s ease-out {-rng.uniform(0, beat):.1f}s infinite"
-        scene.add(f"flies{k}", tile2(light_rgba(flies)), 0, f0, anim, still=still)
+            dots.append((rng.uniform(12, W - 12), y - f0, 1.4 + 1.6 * near, rng.uniform(0.6, 1.0)))
+        flies = soft_dots((f1 - f0, W), dots, rgb("#D6F46A"))
+        anim = f"wall-blink {beat}s ease-out {-rng.uniform(0, beat):.1f}s infinite"
+        scene.add(f"flies{k}", light_rgba(flies), 0, f0, anim, still=still)
     return scene
 
 
