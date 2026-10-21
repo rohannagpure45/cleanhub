@@ -863,8 +863,13 @@ test('Settings can hide Ambient from Home or turn its music off', async () => {
   await openSettings();
   const rows = await page.$$eval('#sheet .sheet-label', (els) => els.map((e) => e.textContent));
   await press('ArrowDown', rows.indexOf('Ambient music'));
-  await press('ArrowLeft'); // All -> Off (wraps)
-  assert.equal((await state()).settings.music, 'off');
+  await press('Enter'); // the genre checklist: untick every genre
+  for (let i = 0; i < 7; i++) {
+    if (i) await press('ArrowDown');
+    await press('Enter');
+  }
+  await press('Escape');
+  assert.deepEqual((await state()).settings.music, []);
   await press('ArrowUp', rows.indexOf('Ambient music') - rows.indexOf('Ambient on Home'));
   await press('ArrowRight');
   assert.equal((await state()).settings.ambient, 'off');
@@ -1110,25 +1115,107 @@ test('Press OK to play: one OK starts the music when autoplay was refused', asyn
   }
 });
 
-test('Ambient music can be the originals, the 1920s recordings, or both', async () => {
-  const sets = async () => page.evaluate(() => {
-    const st = window.CleanHub.player.state();
-    return { count: st.count, first: st.track && st.track.title };
-  });
-  await open('', { settings: S({ music: 'all' }) });
-  const all = await sets();
-  assert.equal(all.count, 15, '5 originals + 10 recordings from the 1920s');
+// The player's list: how many tracks, and which genre the current one is from.
+const playing = () => page.evaluate(() => {
+  const st = window.CleanHub.player.state();
+  return { count: st.count, index: st.index, set: st.track && st.track.set, wanted: st.wanted };
+});
+const GENRES = ['Originals', '1920s', 'Classical', 'Piano', 'Ragtime', 'Big band', 'Ambient'];
+const GENRE_IDS = ['originals', 'vintage', 'classical', 'piano', 'ragtime', 'bigband', 'ambient'];
+const ticked = () => page.$$eval('#sheet .sheet-row.is-on[data-genre] .sheet-label', (els) => els.map((e) => e.textContent));
+const musicRowValue = () => page.$eval('#sheet [data-action="music"] .sheet-value', (e) => e.textContent);
+const trackCounts = () => page.evaluate(() => {
+  const counts = {};
+  window.CleanHub.playlist.forEach((t) => { counts[t.set] = (counts[t.set] || 0) + 1; });
+  return counts;
+});
+
+// Settings → Ambient music: a checklist of genres.
+async function openMusicSheet() {
   await openSettings();
   const rows = await page.$$eval('#sheet .sheet-label', (els) => els.map((e) => e.textContent));
   await press('ArrowDown', rows.indexOf('Ambient music'));
-  await press('ArrowRight'); // Originals
-  assert.deepEqual(await sets(), { count: 5, first: 'Lamp Light' });
-  await press('ArrowRight'); // 1920s
-  assert.deepEqual(await sets(), { count: 10, first: 'Whispering' });
-  assert.equal(await page.$eval('#sheet .sheet-row.is-focused .sheet-value-text', (e) => e.textContent), '1920s');
+  await press('Enter');
+  assert.equal((await state()).screen, 'music');
+}
+
+// Moves to each named genre in the checklist and presses OK on it.
+async function toggleGenres(names) {
+  let at = await page.evaluate(() => window.CleanHub.main.state.musicIndex);
+  for (const name of names) {
+    const to = GENRES.indexOf(name);
+    await press(to > at ? 'ArrowDown' : 'ArrowUp', Math.abs(to - at));
+    await press('Enter');
+    at = to;
+  }
+}
+
+test('Ambient music is a checklist of genres, every one ticked to start', async () => {
+  await open('', { settings: S({ music: 'all' }) });
+  const counts = await trackCounts();
+  const all = GENRE_IDS.reduce((n, id) => n + counts[id], 0);
+  assert.equal((await playing()).count, all);
+  await openMusicSheet();
+  assert.deepEqual(await page.$$eval('#sheet [data-genre] .sheet-label', (els) => els.map((e) => e.textContent)), GENRES);
+  assert.deepEqual(await ticked(), GENRES);
+  assert.match(await page.$eval('#sheet .sheet-sub', (e) => e.textContent), /Playing 7 of 7/);
+  await toggleGenres(['1920s']);
+  assert.deepEqual(await ticked(), GENRES.filter((g) => g !== '1920s'));
+  assert.ok(!(await state()).settings.music.includes('vintage'));
+  assert.equal((await playing()).count, all - counts.vintage, 'the 1920s tracks are gone from the playlist');
+  assert.match(await sheetHint(), /OK\s*Turn on/, 'on an unticked genre');
+  await press('Escape');
+  assert.equal((await state()).screen, 'settings');
+  assert.equal(await focusedSheet(), 'Ambient music', 'Back returns to the row');
+  assert.match(await musicRowValue(), /6 genres/);
+  assert.deepEqual(errors, []);
 });
 
-test('an older saved "music on" setting means All', async () => {
+test('a mix of genres is saved, and after a restart Ambient plays only those', async () => {
+  await open('', { settings: S({ music: 'originals' }) }); // an older single-genre save
+  await openMusicSheet();
+  assert.deepEqual(await ticked(), ['Originals']);
+  await toggleGenres(['Classical', 'Piano', 'Ambient']);
+  const mix = ['originals', 'classical', 'piano', 'ambient'];
+  assert.deepEqual((await state()).settings.music, mix);
+  await press('Escape');
+  assert.match(await musicRowValue(), /4 genres/);
+  await press('Escape'); // back on the Settings button
+  await press('ArrowLeft');
+  assert.equal(await focusedHome(), 'Ambient');
+  await reload(); // the TV app restarting
+  assert.deepEqual((await state()).settings.music, mix, 'the choice was saved');
+  await press('Enter');
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  const counts = await trackCounts();
+  const expected = mix.reduce((n, id) => n + counts[id], 0);
+  const p = await playing();
+  assert.equal(p.count, expected);
+  assert.equal(p.set, 'originals', 'ticked genres play in list order');
+  const heard = new Set([p.set]);
+  for (let i = 1; i < expected; i++) {
+    await press('ArrowRight');
+    heard.add((await playing()).set);
+  }
+  assert.deepEqual([...heard].sort(), [...mix].sort(), 'every track is from a ticked genre');
+  assert.deepEqual(errors, []);
+});
+
+test('after the genres change, a restart starts the new list from its first track', async () => {
+  await openAmbient('', S({ music: 'classical' }));
+  await press('ArrowRight', 2); // two tracks on
+  assert.equal((await playing()).index, 2);
+  await press('Escape');
+  await openMusicSheet();
+  await toggleGenres(['Classical', 'Piano']); // Classical off, Piano on
+  await press('Escape');
+  await reload();
+  const p = await playing();
+  assert.equal(p.set, 'piano');
+  assert.equal(p.index, 0, 'not the third piano piece');
+});
+
+test('an older saved "music on" setting means every genre', async () => {
   await open('', { settings: Object.assign(S(), { music: 'on' }) });
-  assert.equal((await state()).settings.music, 'all');
+  assert.deepEqual((await state()).settings.music, GENRE_IDS);
 });

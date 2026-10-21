@@ -7,6 +7,10 @@
   const KEY = 'cleanhub.settings';
   const MAX_APPS = 40;
 
+  function genreIds() {
+    return CH.genres.map(function (g) { return g.id; });
+  }
+
   const DEFAULTS = {
     v: 1,
     layout: 'list',
@@ -18,7 +22,7 @@
     ambient: 'on',
     wallpaper: 'lamp',
     motion: 'on', // the wallpaper's layers move
-    music: 'all',
+    music: genreIds(), // Ambient's genres, ticked in Settings; [] = no music
     input: 'off', // which HDMI input the Home 'Fire TV' item switches to
     brainrot: 'off', // Ambient shows the brainrot feed instead of the wallpaper
     apps: null // null = not chosen yet; the home screen picks recognised apps
@@ -28,13 +32,29 @@
     return CH.options[name].map(function (o) { return o.id; });
   }
 
+  // The ticked genres, in CH.genres order. Older saves held one value: 'all'
+  // ('on' before there were genres), 'off', or a single genre. A list of
+  // genres that no longer exist falls back to all of them.
+  function musicList(value) {
+    const known = genreIds();
+    if (value === 'off') return [];
+    if (typeof value !== 'string' && !Array.isArray(value)) return known;
+    const list = Array.isArray(value) ? value : [value];
+    const ticked = known.filter(function (id) { return list.indexOf(id) !== -1; });
+    return ticked.length || !list.length ? ticked : known;
+  }
+
+  function defaults() {
+    return Object.assign({}, DEFAULTS, { music: DEFAULTS.music.slice() });
+  }
+
   function sanitize(raw) {
-    const out = Object.assign({}, DEFAULTS);
+    const out = defaults();
     if (!raw || typeof raw !== 'object') return out;
-    if (raw.music === 'on') raw = Object.assign({}, raw, { music: 'all' }); // before the 1920s set
     Object.keys(CH.options).forEach(function (name) {
       if (ids(name).indexOf(raw[name]) !== -1) out[name] = raw[name];
     });
+    out.music = musicList(raw.music);
     if (Array.isArray(raw.apps)) {
       const seen = {};
       out.apps = raw.apps.filter(function (id) {
@@ -82,14 +102,34 @@
     return id;
   }
 
+  // Ticks or unticks one Ambient genre.
+  function toggleGenre(settings, id) {
+    const on = settings.music.indexOf(id) !== -1;
+    const list = on ? settings.music.filter(function (g) { return g !== id; }) : settings.music.concat([id]);
+    return Object.assign({}, settings, { music: musicList(list) });
+  }
+
+  // The Ambient music row's value: Off, All, the one genre, or how many.
+  function musicLabel(list) {
+    if (!list.length) return 'Off';
+    if (list.length === CH.genres.length) return 'All';
+    if (list.length > 1) return list.length + ' genres';
+    for (let i = 0; i < CH.genres.length; i++) {
+      if (CH.genres[i].id === list[0]) return CH.genres[i].name;
+    }
+    return list[0];
+  }
+
   CH.store = {
     KEY: KEY,
     MAX_APPS: MAX_APPS,
-    defaults: function () { return Object.assign({}, DEFAULTS); },
+    defaults: defaults,
     sanitize: sanitize,
     load: load,
     save: save,
     cycle: cycle,
-    label: label
+    label: label,
+    toggleGenre: toggleGenre,
+    musicLabel: musicLabel
   };
 })(typeof window !== 'undefined' ? window : globalThis);

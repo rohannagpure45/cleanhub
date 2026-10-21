@@ -1,0 +1,16 @@
+{
+  "name": "Piano",
+  "summary": "public-domain and CC0 solo piano recordings",
+  "note": "Recordings released into the public domain by Musopen ({{PD-author|Musopen}} on Wikimedia Commons, including the 'Set Chopin Free' and Complete Chopin collections) or under CC0 (Kimiko Ishizaka's Open Goldberg Variations), of compositions published before 1931. Sources: Wikimedia Commons.",
+  "profile": "modern",
+  "bitrate": 96000,
+  "license": "Public domain recording (Musopen)",
+  "tracks": [
+    {"id": "satie-gymnopedie-1", "title": "Gymnopédie No. 1", "artist": "Erik Satie · Robin Alciatore", "year": "", "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/9/90/Erik_Satie_-_gymnopedies_-_la_1_ere._lent_et_douloureux.ogg/Erik_Satie_-_gymnopedies_-_la_1_ere._lent_et_douloureux.ogg.mp3", "page": "https://commons.wikimedia.org/wiki/File:Erik_Satie_-_gymnopedies_-_la_1_ere._lent_et_douloureux.ogg"},
+    {"id": "chopin-nocturne-op9-no2", "title": "Nocturne in E-flat, Op. 9 No. 2", "artist": "Frédéric Chopin · Frank Lévy", "year": "", "url": "https://upload.wikimedia.org/wikipedia/commons/8/89/Chopin_-_Nocturne_No._2_in_E-flat_major%2C_Op._9_No._2_%28Frank_Levy%29.flac", "page": "https://commons.wikimedia.org/wiki/File:Chopin_-_Nocturne_No._2_in_E-flat_major,_Op._9_No._2_(Frank_Levy).flac"},
+    {"id": "bach-goldberg-aria", "title": "Aria (Goldberg Variations)", "artist": "J. S. Bach · Kimiko Ishizaka", "year": "2012", "url": "https://upload.wikimedia.org/wikipedia/commons/5/59/Kimiko_Ishizaka_-_J.S._Bach-_-Open-_Goldberg_Variations%2C_BWV_988_%28Piano%29_-_01_Aria.mp3", "page": "https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_J.S._Bach-_-Open-_Goldberg_Variations,_BWV_988_(Piano)_-_01_Aria.mp3", "license": "CC0 1.0 (Open Goldberg Variations)"},
+    {"id": "schumann-traumerei", "title": "Träumerei (Kinderszenen)", "artist": "Robert Schumann · Donald Betts", "year": "", "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/0/06/Robert_Schumann_-_scenes_from_childhood%2C_op._15_-_vii._dreaming.ogg/Robert_Schumann_-_scenes_from_childhood%2C_op._15_-_vii._dreaming.ogg.mp3", "page": "https://commons.wikimedia.org/wiki/File:Robert_Schumann_-_scenes_from_childhood,_op._15_-_vii._dreaming.ogg"},
+    {"id": "chopin-prelude-op28-no13", "title": "Prelude in F-sharp, Op. 28 No. 13", "artist": "Frédéric Chopin", "year": "", "url": "https://upload.wikimedia.org/wikipedia/commons/b/b5/Prelude_Op._28_no._13.mp3", "page": "https://commons.wikimedia.org/wiki/File:Prelude_Op._28_no._13.mp3", "license": "CC0 1.0 (Musopen)"},
+    {"id": "beethoven-moonlight-i", "title": "Moonlight Sonata: Adagio sostenuto", "artist": "Ludwig van Beethoven · Paul Pitman", "year": "", "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/4/48/Ludwig_van_Beethoven_-_sonata_no._14_in_c_sharp_minor_%27moonlight%27%2C_op._27_no._2_-_i._adagio_sostenuto.ogg/Ludwig_van_Beethoven_-_sonata_no._14_in_c_sharp_minor_%27moonlight%27%2C_op._27_no._2_-_i._adagio_sostenuto.ogg.mp3", "page": "https://commons.wikimedia.org/wiki/File:Ludwig_van_Beethoven_-_sonata_no._14_in_c_sharp_minor_%27moonlight%27,_op._27_no._2_-_i._adagio_sostenuto.ogg"}
+  ]
+}

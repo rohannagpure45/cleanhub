@@ -14,10 +14,11 @@
     loaded: false, // some app list (cached or live) is showing
     fresh: false, // the TV has answered (or failed) at least once
     error: null,
-    screen: 'home', // 'home' | 'settings' | 'apps'
+    screen: 'home', // 'home' | 'settings' | 'apps' | 'music' | 'ambient'
     homeIndex: 0, // the focused (or, on Settings, last focused) app
     homeOnGear: false, // Settings button has focus
     settingsIndex: 0,
+    musicIndex: 0, // focused genre in the Ambient music sheet
     appsIndex: 0,
     appsFocus: null, // id of the focused apps-sheet row (or SWITCH); survives re-sorting
     rows: [], // apps-sheet rows as last drawn
@@ -217,6 +218,7 @@
     CH.ui.renderSettings(state.settings, {
       version: VERSION,
       homeCount: state.home.length,
+      musicLabel: CH.store.musicLabel(state.settings.music),
       confirmReset: state.confirmReset
     }, state.settingsIndex);
   }
@@ -261,7 +263,7 @@
     save();
     CH.ui.applyLook(next);
     if (relayout) renderHome(remembered ? remembered.id : null);
-    if (next.music !== prev.music || next.brainrot !== prev.brainrot) changeMusic();
+    if (next.music.join() !== prev.music.join() || next.brainrot !== prev.brainrot) changeMusic();
     if (next.input !== prev.input) cancelSwitch();
     if (next.wallpaper !== prev.wallpaper || next.motion !== prev.motion) {
       CH.ui.showWall(wallNow(), state.screen !== 'ambient', wallMoves());
@@ -288,6 +290,10 @@
     }
     if (row === 'apps') {
       if (key === 'ok' || key === 'right') openApps();
+      return;
+    }
+    if (row === 'music') {
+      if (key === 'ok' || key === 'right') openMusic();
       return;
     }
     if (row === 'reset') {
@@ -470,6 +476,41 @@
     }
   }
 
+  // ---- Ambient music -------------------------------------------------------------
+
+  // A checklist of genres: OK ticks or unticks the focused one, and Ambient
+  // plays every ticked genre (none: no music).
+  function renderMusic() {
+    CH.ui.renderMusicSheet(CH.genres, state.settings.music, state.musicIndex);
+  }
+
+  function openMusic() {
+    state.screen = 'music';
+    state.musicIndex = 0;
+    renderMusic();
+  }
+
+  function onMusicKey(key) {
+    if (key === 'back') {
+      state.screen = 'settings';
+      renderSettings();
+      return;
+    }
+    if (key === 'up' || key === 'down') {
+      const next = CH.focus.step(state.musicIndex, CH.genres.length, key === 'down' ? 1 : -1);
+      if (next !== state.musicIndex) {
+        state.musicIndex = next;
+        CH.ui.focusSheet(next);
+        CH.ui.updateMusicHint(CH.genres, state.settings.music, next);
+      }
+      return;
+    }
+    if (key === 'ok') {
+      changeSettings(CH.store.toggleGenre(state.settings, CH.genres[state.musicIndex].id));
+      renderMusic();
+    }
+  }
+
   // ---- Fire TV input ------------------------------------------------------------
 
   // Samsung's full-screen viewer for the TV's main input. Only hiding Clean
@@ -589,7 +630,9 @@
     try {
       const st = CH.player.state();
       // `wanted`, not `playing`: a power-off pauses the audio but not the wish.
-      storage().setItem(AMBIENT_STATE, JSON.stringify({ open: open, track: st.index, paused: !st.wanted }));
+      storage().setItem(AMBIENT_STATE, JSON.stringify({
+        open: open, track: st.index, file: st.track ? st.track.file : null, paused: !st.wanted
+      }));
     } catch (e) {
       // Only means Ambient won't come back by itself after a restart.
     }
@@ -603,16 +646,25 @@
     }
   }
 
-  function musicOn() {
-    return state.settings.music !== 'off';
+  // Where Ambient left off in this list: the saved track if it's still in it,
+  // else the top (the Music setting changed since).
+  function resumeIndex(tracks, saved) {
+    if (!saved.file) return saved.track; // saved before tracks were remembered by file
+    for (let i = 0; i < tracks.length; i++) {
+      if (tracks[i].file === saved.file) return i;
+    }
+    return 0;
   }
 
-  // The tracks for a Music setting: 'all', 'originals', 'vintage' (1920s).
+  function musicOn() {
+    return state.settings.music.length > 0;
+  }
+
+  // The tracks of the ticked genres (a track's `set` is its genre id), in
+  // playlist order.
   function tracksFor(music) {
     return (CH.playlist || []).filter(function (t) {
-      if (music === 'originals') return t.set !== '1920s';
-      if (music === 'vintage') return t.set === '1920s';
-      return music !== 'off';
+      return music.indexOf(t.set) !== -1;
     });
   }
 
@@ -853,6 +905,7 @@
     else if (state.screen === 'ambient') onAmbientKey(key);
     else if (state.screen === 'settings') onSettingsKey(key);
     else if (state.screen === 'apps') onAppsKey(key);
+    else if (state.screen === 'music') onMusicKey(key);
   }
 
   function onKeyUp(event) {
@@ -895,7 +948,8 @@
     }
     renderHome(null);
     const ambient = s ? readAmbient() : {};
-    CH.player.init(ambientTracks(), ambient.track, onPlayer);
+    const tracks = ambientTracks();
+    CH.player.init(tracks, resumeIndex(tracks, ambient), onPlayer);
     // Left on Ambient (e.g. the TV went off with it showing): come back to it.
     if (ambient.open && state.settings.ambient === 'on') openAmbient(!ambient.paused);
     doc.addEventListener('keydown', onKey);

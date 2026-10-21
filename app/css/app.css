@@ -722,6 +722,18 @@ html[data-theme="paper"] .sheet-row-danger.is-focused {
   box-shadow: inset 0 0 0 3px var(--fg-faint);
 }
 
+/* The Ambient music checklist: square boxes, since any number can be ticked. */
+.check-box {
+  border-radius: 10px;
+}
+
+.sheet-note {
+  flex: none;
+  margin-left: 24px;
+  font-size: 26px;
+  color: var(--fg-dim);
+}
+
 .check svg {
   display: block;
   width: 40px;

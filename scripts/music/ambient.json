@@ -1,0 +1,15 @@
+{
+  "name": "Ambient",
+  "summary": "CC0 ambient music",
+  "note": "Composition and recording both dedicated to the public domain under CC0 1.0 by their creators. Kevin MacLeod's FreePD collection (freepd.com, now closed; licence statement archived at web.archive.org, files mirrored byte-identical at archive.org/details/freepd) and graphite412's own CC0 release on archive.org.",
+  "profile": "modern",
+  "bitrate": 96000,
+  "license": "CC0 1.0 (public domain dedication)",
+  "tracks": [
+    {"id": "mana-two-part-1", "title": "Mana Two, Part 1", "artist": "Kevin MacLeod", "year": "", "url": "https://archive.org/download/freepd/misc/Mana%20Two%20-%20Part%201.mp3", "page": "https://web.archive.org/web/20240804230525/https://freepd.com/misc.php", "license": "CC0 1.0 (FreePD)"},
+    {"id": "kardia-psallo-i", "title": "Kardia Psallo I in D Major", "artist": "graphite412", "year": "2011", "url": "https://archive.org/download/E4g001-KardiaPsalloI/KardiaPsalloIInDMajor.mp3", "page": "https://archive.org/details/E4g001-KardiaPsalloI", "license": "CC0 1.0"},
+    {"id": "mana-two-part-2", "title": "Mana Two, Part 2", "artist": "Kevin MacLeod", "year": "", "url": "https://archive.org/download/freepd/misc/Mana%20Two%20-%20Part%202.mp3", "page": "https://web.archive.org/web/20240804230525/https://freepd.com/misc.php", "license": "CC0 1.0 (FreePD)"},
+    {"id": "infinite-wonder", "title": "Infinite Wonder", "artist": "Kevin MacLeod", "year": "", "url": "https://archive.org/download/freepd/misc/Infinite%20Wonder.mp3", "page": "https://web.archive.org/web/20240804230525/https://freepd.com/misc.php", "license": "CC0 1.0 (FreePD)"},
+    {"id": "mana-two-part-3", "title": "Mana Two, Part 3", "artist": "Kevin MacLeod", "year": "", "url": "https://archive.org/download/freepd/misc/Mana%20Two%20-%20Part%203.mp3", "page": "https://web.archive.org/web/20240804230525/https://freepd.com/misc.php", "license": "CC0 1.0 (FreePD)"}
+  ]
+}

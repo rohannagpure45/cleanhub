@@ -1,0 +1,17 @@
+{
+  "name": "Big band",
+  "summary": "public-domain big band recordings",
+  "note": "The U.S. Air Force's jazz ensembles playing their own members' compositions and arrangements (U.S. government works, from the Air Force's public-domain music library via Wikimedia Commons), and early big-band and dance-orchestra 78s published before 1926 (U.S. public domain under 17 U.S.C. 1401) of compositions published before 1931. Sources: Wikimedia Commons and the Internet Archive's Great 78 Project.",
+  "profile": "modern",
+  "bitrate": 96000,
+  "license": "U.S. public domain recording",
+  "tracks": [
+    {"id": "sheridan-square", "title": "Sheridan Square", "artist": "Airmen of Note", "year": "2019", "url": "https://upload.wikimedia.org/wikipedia/commons/4/45/Sheridan_Square_-_Airmen_of_Note_-_United_States_Air_Force_Band.mp3", "page": "https://commons.wikimedia.org/wiki/File:Sheridan_Square_-_Airmen_of_Note_-_United_States_Air_Force_Band.mp3", "license": "U.S. government work (U.S. Air Force Band)"},
+    {"id": "fox-trot-classique", "title": "Fox Trot Classique", "artist": "Jean Goldkette and His Orchestra", "year": "1924", "profile": "78rpm", "url": "https://archive.org/download/78_fox-trot-classique_jean-goldkette-his-orchestra-cadman-macdowell_gbia3041474b/Fox%20Trot%20Classique%20-%20Jean%20Goldkette%20%26%20his%20Orchestra.mp3", "page": "https://archive.org/details/78_fox-trot-classique_jean-goldkette-his-orchestra-cadman-macdowell_gbia3041474b"},
+    {"id": "blues-for-mundy", "title": "Blues for Mundy", "artist": "Airmen of Note", "year": "", "url": "https://upload.wikimedia.org/wikipedia/commons/5/53/Blues_for_Mundy_-_Airmen_of_Note_-_United_States_Air_Force_Band.mp3", "page": "https://commons.wikimedia.org/wiki/File:Blues_for_Mundy_-_Airmen_of_Note_-_United_States_Air_Force_Band.mp3", "license": "U.S. government work (U.S. Air Force Band)"},
+    {"id": "manhattan", "title": "Manhattan", "artist": "The Knickerbockers (Ben Selvin)", "year": "1925", "profile": "78rpm", "url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Manhattan_%281925%29_The_Knickerbockers_-_Columbia_422-D.mp3", "page": "https://commons.wikimedia.org/wiki/File:Manhattan_(1925)_The_Knickerbockers_-_Columbia_422-D.mp3"},
+    {"id": "little-dreamer-big-dreams", "title": "Little Dreamer, Big Dreams", "artist": "Airmen of Note", "year": "2012", "url": "https://upload.wikimedia.org/wikipedia/commons/a/ad/Little_Dreamer%2C_Big_Dreams_-_Airmen_of_Note_-_United_States_Air_Force_Band.mp3", "page": "https://commons.wikimedia.org/wiki/File:Little_Dreamer,_Big_Dreams_-_Airmen_of_Note_-_United_States_Air_Force_Band.mp3", "license": "U.S. government work (U.S. Air Force Band)"},
+    {"id": "dicty-blues", "title": "Dicty Blues", "artist": "Fletcher Henderson and His Orchestra", "year": "1923", "profile": "78rpm", "url": "https://archive.org/download/78_dicty-blues_fletcher-henderson-and-his-orchestra-henderson-lyons_gbia0399956a/DICTY%20BLUES%20-%20FLETCHER%20HENDERSON%20AND%20HIS%20ORCHESTRA.mp3", "page": "https://archive.org/details/78_dicty-blues_fletcher-henderson-and-his-orchestra-henderson-lyons_gbia0399956a"},
+    {"id": "three-oclock-in-the-morning", "title": "Three O'Clock in the Morning", "artist": "Paul Whiteman and His Orchestra", "year": "1922", "profile": "78rpm", "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/b/be/Three_O%27clock_In_The_Morning.ogg/Three_O%27clock_In_The_Morning.ogg.mp3", "page": "https://commons.wikimedia.org/wiki/File:Three_O%27clock_In_The_Morning.ogg"}
+  ]
+}

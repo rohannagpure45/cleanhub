@@ -1,0 +1,18 @@
+{
+  "name": "Ragtime",
+  "summary": "public-domain and CC0 ragtime recordings",
+  "note": "Compositions published before 1931. Recordings: U.S. public domain (published before 1926; 17 U.S.C. 1401), a U.S. government work (the U.S. Marine Band), or dedicated to the public domain by the performer (CC0 / PD-self). Sources: Wikimedia Commons and the Library of Congress National Jukebox.",
+  "profile": "modern",
+  "bitrate": 96000,
+  "license": "U.S. public domain recording",
+  "tracks": [
+    {"id": "palm-leaf-rag", "title": "Palm Leaf Rag", "artist": "Scott Joplin · James Brigham", "year": "2016", "url": "https://upload.wikimedia.org/wikipedia/commons/7/7b/%22Palm_Leaf_Rag%22_%281903%29%2C_by_Scott_Joplin.mp3", "page": "https://commons.wikimedia.org/wiki/File:%22Palm_Leaf_Rag%22_(1903),_by_Scott_Joplin.mp3", "license": "CC0 1.0 (performance)"},
+    {"id": "gladiolus-rag", "title": "Gladiolus Rag", "artist": "Scott Joplin · Pathé Dance Orchestra", "year": "1914", "profile": "78rpm", "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/6/66/Gladiolus_Rag-Scott_Joplin%2C_Pathe_Dance_Orchestra_1914.opus/Gladiolus_Rag-Scott_Joplin%2C_Pathe_Dance_Orchestra_1914.opus.mp3", "page": "https://commons.wikimedia.org/wiki/File:Gladiolus_Rag-Scott_Joplin,_Pathe_Dance_Orchestra_1914.opus"},
+    {"id": "the-entertainer", "title": "The Entertainer", "artist": "Scott Joplin · James Brigham", "year": "2018", "url": "https://upload.wikimedia.org/wikipedia/commons/b/bd/%22The_Entertainer%22_%281902%29%2C_by_Scott_Joplin.mp3", "page": "https://commons.wikimedia.org/wiki/File:%22The_Entertainer%22_(1902),_by_Scott_Joplin.mp3", "license": "CC0 1.0 (performance)"},
+    {"id": "pleasant-moments", "title": "Pleasant Moments", "artist": "Scott Joplin (piano roll)", "year": "1916", "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/9/9a/Pleasant_Moments_Piano_Roll.ogg/Pleasant_Moments_Piano_Roll.ogg.mp3", "page": "https://commons.wikimedia.org/wiki/File:Pleasant_Moments_Piano_Roll.ogg"},
+    {"id": "sunflower-slow-drag", "title": "Sunflower Slow Drag", "artist": "Scott Joplin & Scott Hayden · U.S. Marine Band", "year": "1994", "url": "https://upload.wikimedia.org/wikipedia/commons/6/69/%22Sunflower_Slow_Drag%22_performed_by_the_United_States_Marine_Band_in_May_1994.mp3", "page": "https://commons.wikimedia.org/wiki/File:%22Sunflower_Slow_Drag%22_performed_by_the_United_States_Marine_Band_in_May_1994.mp3", "license": "U.S. government work (U.S. Marine Band)"},
+    {"id": "persian-lamb-rag", "title": "Persian Lamb Rag", "artist": "Percy Wenrich · Vess L. Ossman", "year": "1908", "profile": "78rpm", "url": "https://tile.loc.gov/storage-services/service/mbrsrs/mbrsjukebox/ucsb_victor_16127_01_b6504_01/ucsb_victor_16127_01_b6504_01.mp3", "page": "https://www.loc.gov/item/jukebox-126829/"},
+    {"id": "magnetic-rag", "title": "Magnetic Rag", "artist": "Scott Joplin · Pracchia-78", "year": "", "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/0/0a/Scott_Joplin_-_Magnetic_Rag.ogg/Scott_Joplin_-_Magnetic_Rag.ogg.mp3", "page": "https://commons.wikimedia.org/wiki/File:Scott_Joplin_-_Magnetic_Rag.ogg", "license": "Public domain (released by the performer)"},
+    {"id": "nola", "title": "Nola", "artist": "Felix Arndt", "year": "1916", "profile": "78rpm", "url": "https://tile.loc.gov/storage-services/service/mbrsrs/mbrsjukebox/dlc_victor_18056_02_b17399_02/dlc_victor_18056_02_b17399_02.mp3", "page": "https://www.loc.gov/item/jukebox-17088/"}
+  ]
+}

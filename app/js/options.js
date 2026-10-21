@@ -57,12 +57,6 @@
       { id: 'on', name: 'On' },
       { id: 'off', name: 'Off' }
     ],
-    music: [
-      { id: 'all', name: 'All' },
-      { id: 'originals', name: 'Originals' },
-      { id: 'vintage', name: '1920s' },
-      { id: 'off', name: 'Off' }
-    ],
     input: [
       { id: 'off', name: 'Off' },
       { id: 'hdmi1', name: 'HDMI 1' },
@@ -75,6 +69,20 @@
       { id: 'on', name: 'On' }
     ]
   };
+
+  // Ambient's music, ticked on or off in Settings → Ambient music (any mix;
+  // none = silent). Each id is a set of bundled tracks (track.set):
+  // music/playlist.js, music/vintage.js and music/<id>.js. Ticked genres
+  // play in this order.
+  CH.genres = [
+    { id: 'originals', name: 'Originals', note: 'Clean Hub Trio jazz' },
+    { id: 'vintage', name: '1920s', note: 'Dance bands and blues, 1919–25' },
+    { id: 'classical', name: 'Classical', note: 'Grieg, Vivaldi, Haydn, Dvořák' },
+    { id: 'piano', name: 'Piano', note: 'Satie, Chopin, Bach, Beethoven' },
+    { id: 'ragtime', name: 'Ragtime', note: 'Joplin and friends' },
+    { id: 'bigband', name: 'Big band', note: 'Airmen of Note, 1920s orchestras' },
+    { id: 'ambient', name: 'Ambient', note: 'Slow pads and drones' }
+  ];
 
   // The settings sheet, top to bottom. 'action' rows open or do something;
   // the rest cycle through CH.options[id].
@@ -89,7 +97,7 @@
     { id: 'ambient', label: 'Ambient on Home' },
     { id: 'wallpaper', label: 'Ambient wallpaper' },
     { id: 'motion', label: 'Wallpaper motion' },
-    { id: 'music', label: 'Ambient music' },
+    { id: 'music', kind: 'action', label: 'Ambient music' },
     { id: 'input', label: 'Fire TV on Home' },
     { id: 'reset', kind: 'action', label: 'Reset to defaults' },
     { id: 'brainrot', label: 'Brainrot mode' } // Ambient becomes a TikTok-style feed

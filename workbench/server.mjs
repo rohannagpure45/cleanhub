@@ -24,18 +24,19 @@ const TYPES = {
 };
 
 // The page's query picks a test playlist: the playlist script's request
-// carries the page URL as its Referer.
+// carries the page URL as its Referer. Test tracks stand in for the
+// originals, so Music 'all' and 'originals' both play them.
 function playlistFor(req, body) {
   const ref = req.headers.referer ? new URL(req.headers.referer).searchParams.get('music') : null;
+  const track = (file, title) => `{ "file": "${file}", "title": "${title}", "set": "originals" }`;
   if (ref === 'none') return body.replace(/CH\.playlist = [\s\S]*?\];/, 'CH.playlist = [];');
   if (ref === 'gap') {
-    return body.replace(/CH\.playlist = [\s\S]*?\];/,
-      'CH.playlist = [{ "file": "01-lamp-light.m4a", "title": "Lamp Light" }, { "file": "missing.m4a", "title": "Gone" }, ' +
-      '{ "file": "03-quiet-harbor.m4a", "title": "Quiet Harbor" }];');
+    return body.replace(/CH\.playlist = [\s\S]*?\];/, 'CH.playlist = [' + [track('01-lamp-light.m4a', 'Lamp Light'),
+      track('missing.m4a', 'Gone'), track('03-quiet-harbor.m4a', 'Quiet Harbor')].join(', ') + '];');
   }
   if (ref === 'broken') {
     return body.replace(/CH\.playlist = [\s\S]*?\];/,
-      'CH.playlist = [{ "file": "missing-1.m4a", "title": "Gone" }, { "file": "missing-2.m4a", "title": "Also gone" }];');
+      'CH.playlist = [' + [track('missing-1.m4a', 'Gone'), track('missing-2.m4a', 'Also gone')].join(', ') + '];');
   }
   return body;
 }
@@ -70,8 +71,10 @@ export function start(port = PORT) {
           '<script src="/__workbench/mock-tizen.js"></script>\n  <script src="js/catalog.js">');
       }
       if (path === '/music/playlist.js') body = playlistFor(req, String(body));
-      // A test playlist replaces the whole list, so the 1920s set stays out.
-      if (path === '/music/vintage.js' && req.headers.referer && new URL(req.headers.referer).searchParams.get('music')) {
+      // A test playlist replaces the whole list, so the other sets (1920s,
+      // the genres, brainrot) stay out.
+      if (/^\/music\/[^/]+\.js$/.test(path) && path !== '/music/playlist.js' &&
+          req.headers.referer && new URL(req.headers.referer).searchParams.get('music')) {
         body = '/* replaced by a test playlist */';
       }
       const type = TYPES[extname(file)] || 'application/octet-stream';

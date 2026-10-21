@@ -19,8 +19,9 @@ exactly as they are.
 ## What you get
 
 - **Two layouts.** A big-type list, or a dock of tiles with a large clock.
-- **Ambient, first on Home.** A wallpaper, a small clock and a loop of jazz,
-  made to leave on all day (see
+- **Ambient, first on Home.** A wallpaper, a small clock and music from the
+  genres you tick in Settings (original jazz, 1920s, classical, piano,
+  ragtime, big band, ambient), made to leave on all day (see
   [docs/TV-SETUP.md](docs/TV-SETUP.md#ambient-leaving-it-on-all-day)). Three
   wallpapers are near-black and low power (Lamp, Midnight, Black); six are
   full-colour scenes (Sunset, Coast, Dunes, Aurora, City Rain, Deco); Rotate
@@ -156,26 +157,31 @@ script is seeded, so it rebuilds the same tracks every time. To use other
 music, drop `.m4a` or `.mp3` files in `app/music` and list them in
 `app/music/playlist.js`.
 
-Ambient also carries ten **1920s recordings**, about 30 minutes. They are
-U.S. public domain: under 17 U.S.C. §1401, recordings published before 1926
-are free as of 2026, and every composition was published before 1931.
-Settings → Ambient music chooses *All*, *Originals*, *1920s* or *Off*.
-`python3 scripts/prepare-vintage.py` re-downloads them from Wikimedia Commons
-and the Library of Congress National Jukebox, filters the 78-rpm rumble and
-hiss, levels them, and encodes them to mono AAC in `app/music/vintage/`.
+Ambient also carries six **genres** of recordings that are free to use.
+Settings → Ambient music is a checklist of every genre, the originals
+included: OK ticks or unticks one, Ambient plays the ticked genres one after
+another, and with none ticked it's silent. The choice is saved, so it holds
+after a restart too.
 
-| Recording | Performers | Year | |
+| Genre | Tracks | What it is | Why it's free |
 | --- | --- | --- | --- |
-| Whispering | Paul Whiteman and His Ambassador Orchestra | 1920 | [source](https://commons.wikimedia.org/wiki/File:Paul_Whiteman_and_His_Ambassador_Orchestra_-_Whispering.flac) |
-| Rose Room | Art Hickman's Orchestra | 1919 | [source](https://commons.wikimedia.org/wiki/File:%22Rose_Room%22_(1919),_by_Art_Hickman%27s_Orchestra.oga) |
-| It Had to Be You | Isham Jones & His Orchestra | 1924 | [source](https://commons.wikimedia.org/wiki/File:Isham_Jones_%26_his_Orchestra_-_%22It_Had_to_Be_You%22_(1924).oga) |
-| Somebody Loves Me | Paul Whiteman Orchestra | 1924 | [source](https://commons.wikimedia.org/wiki/File:Somebody_Loves_Me-Victor_19414-Paul_Whiteman_Orchestra.mp3) |
-| What'll I Do | Paul Whiteman Orchestra | 1924 | [source](https://commons.wikimedia.org/wiki/File:What%27ll_I_do_(1924_sound_recording).mp3) |
-| I'll See You in My Dreams | Isham Jones & Ray Miller's Orchestra | 1924 | [source](https://commons.wikimedia.org/wiki/File:I%27ll_See_You_In_My_Dreams_-_Isham_Jones_%26_Ray_Miller_Orch_(1924).ogg) |
-| The St. Louis Blues | Bessie Smith with Louis Armstrong | 1925 | [source](https://commons.wikimedia.org/wiki/File:Bessie_Smith_and_Louis_Armstrong_-_The_St._Louis_Blues_(1925).mp3) |
-| Down Hearted Blues | Bessie Smith | 1923 | [source](https://www.loc.gov/item/jukebox-670189/) |
-| Muscle Shoals Blues | Fletcher Henderson's Orchestra | 1924 | [source](https://www.loc.gov/item/jukebox-673894/) |
-| Copenhagen | The Wolverines with Bix Beiderbecke | 1924 | [source](https://commons.wikimedia.org/wiki/File:BixBeiderbecke-Copenhagen.ogg) |
+| 1920s | 10, 30 min | Dance bands and blues, 1919–1925 (Whiteman, Bessie Smith, Bix) | U.S. recordings published before 1926 |
+| Classical | 6, 24 min | Slow movements: Grieg, Vivaldi's Four Seasons, Haydn, Dvořák | Musopen's public-domain recordings |
+| Piano | 6, 24 min | Satie, Chopin, Bach's Goldberg Aria, Schumann, Beethoven | Musopen's public-domain recordings; Open Goldberg (CC0) |
+| Ragtime | 8, 29 min | Joplin and friends: piano, a roll, banjo, 78s, the U.S. Marine Band | Pre-1926 recordings, CC0 performances, a U.S. government work |
+| Big band | 7, 26 min | The Air Force's Airmen of Note; Henderson, Goldkette, Whiteman 78s | U.S. government works; pre-1926 recordings |
+| Ambient | 5, 24 min | Slow pads and drones (Kevin MacLeod's FreePD, graphite412) | CC0 |
+
+Every composition was published before 1931 (U.S. public domain as of 2026),
+or is itself CC0 or a U.S. government work. Each track's title, performers,
+licence and source page are in `scripts/music/<genre>.json` and in the
+`credit` of `app/music/<genre>.js`. `python3 scripts/prepare-music.py
+[genre …]` re-downloads them from Wikimedia Commons, the Library of Congress
+National Jukebox and the Internet Archive, trims and levels them (and filters
+the 78s' rumble and hiss), and encodes them to AAC in `app/music/<genre>/`.
+To add a genre, write its `scripts/music/<id>.json`, run the script, add it
+to `CH.genres` in `app/js/options.js` and load `music/<id>.js` in
+`app/index.html`.
 
 ### Brainrot mode
 

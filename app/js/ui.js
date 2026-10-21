@@ -455,8 +455,35 @@
     CH.settingRows.forEach(function (r, i) {
       let row;
       if (r.id === 'apps') row = actionRow('apps', r.label, count);
+      else if (r.id === 'music') row = actionRow('music', r.label, ctx.musicLabel);
       else if (r.id === 'reset') row = actionRow('reset', ctx.confirmReset ? 'Press OK again to reset everything' : r.label, '', true);
       else row = optionRow(r.id, r.label, settings);
+      addRow(row, i === focusIndex);
+    });
+    alignGlass(sheet.el);
+    focusSheet(focusIndex, true);
+  }
+
+  function musicHint(genres, chosen, focusIndex) {
+    const on = chosen.indexOf(genres[focusIndex].id) !== -1;
+    return [['OK', on ? 'Turn off' : 'Turn on'], ['Back', 'Settings']];
+  }
+
+  // Focus moved in the music sheet: only the hint line depends on it.
+  function updateMusicHint(genres, chosen, focusIndex) {
+    if (sheet.hint) fillHint(sheet.hint, musicHint(genres, chosen, focusIndex));
+  }
+
+  // The Ambient music checklist. genres: CH.genres; chosen: the ticked ids.
+  function renderMusicSheet(genres, chosen, focusIndex) {
+    sheetFrame('Ambient music', chosen.length ? 'Playing ' + chosen.length + ' of ' + genres.length : 'Music off',
+      musicHint(genres, chosen, focusIndex));
+    genres.forEach(function (g, i) {
+      const row = h('div', 'sheet-row' + (chosen.indexOf(g.id) !== -1 ? ' is-on' : ''));
+      row.setAttribute('data-genre', g.id);
+      row.appendChild(svg('check check-box', ICONS.check));
+      row.appendChild(h('span', 'sheet-label', g.name));
+      row.appendChild(h('span', 'sheet-note', g.note));
       addRow(row, i === focusIndex);
     });
     alignGlass(sheet.el);
@@ -907,6 +934,8 @@
     pressHome: pressHome,
     renderSettings: renderSettings,
     renderAppsSheet: renderAppsSheet,
+    renderMusicSheet: renderMusicSheet,
+    updateMusicHint: updateMusicHint,
     updateAppsHint: updateAppsHint,
     moveAppsRow: moveAppsRow,
     focusSheet: focusSheet,
