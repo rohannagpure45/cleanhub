@@ -55,9 +55,24 @@
     return { id: a.id, name: a.name, iconPath: a.iconPath || '', show: a.show !== false, version: '1.0.0' };
   }
 
+  // The Home watcher's side: what the page told it, by app control (or, with
+  // ?homeDown=1 for the message port, still by app control).
+  function told(cmd) {
+    try {
+      window.__mock.home.push(JSON.parse(cmd));
+    } catch (e) {
+      window.__mock.home.push({ garbled: cmd });
+    }
+  }
+
   window.__mock = {
     launches: launches,
     appControls: [], // what the page asked the Fire TV service, as { id, data }
+    home: [], // commands the page sent the Home watcher, in order
+    fireKeys: [], // keys the page passed to the Fire TV service, in order
+    tvWindow: null, // the TV picture the page shows, as { rect, type, z }
+    source: { type: 'TV', number: 1 }, // the TV's main input
+    keys: {}, // remote keys the page registered
     ports: {}, // local message port listeners, by name
     sources: [],
     hidden: 0,
@@ -78,6 +93,17 @@
       var pending = held.splice(0);
       pending.forEach(function (fn) { fn(); });
     },
+    // The Home watcher brings Clean Hub back after Home: the page shows again,
+    // and if it asks, hears that it was the watcher.
+    homeBack: function () {
+      window.__mock.returnFromApp();
+      var last = window.__mock.home[window.__mock.home.length - 1];
+      if (last && last.do === 'shown' && last.ask) window.__mock.homeSays('back', {});
+    },
+    homeSays: function (key, value) {
+      var listener = window.__mock.ports.home;
+      if (listener) listener([{ key: key, value: JSON.stringify(value) }]);
+    },
     // Plays the Fire TV service's answer, e.g. { package, state: 'unreachable' }.
     fireTvAnswer: function (result) {
       var listener = window.__mock.ports.firetv;
@@ -96,6 +122,23 @@
     },
     // ?fireTvFail=1: the Fire TV service won't start.
     messageport: {
+      requestRemoteMessagePort: function (appId, name) {
+        if (appId === 'CleanHub01.FireTv' && name === 'firetv-key' && params.get('fireTvFail') !== '1') {
+          return {
+            sendMessage: function (data) {
+              data.forEach(function (d) { if (d.key === 'key') window.__mock.fireKeys.push(JSON.parse(d.value).name); });
+            }
+          };
+        }
+        if (appId !== 'CleanHub01.Home' || name !== 'home' || params.get('homeDown') === '1') {
+          throw { name: 'NotFoundError', message: 'No remote port ' + appId + '/' + name };
+        }
+        return {
+          sendMessage: function (data) {
+            data.forEach(function (d) { if (d.key === 'cmd') told(d.value); });
+          }
+        };
+      },
       requestLocalMessagePort: function (name) {
         return {
           addMessagePortListener: function (fn) {
@@ -106,15 +149,23 @@
       }
     },
     application: {
+      // Clean Hub's services get commands and keys this way; they're noted as
+      // sent (the TV delivers them a moment later).
       launchAppControl: function (control, id, ok, fail) {
+        var data = {};
+        control.data.forEach(function (d) { data[d.key] = d.value; });
+        if (id === 'CleanHub01.Home') told(data.cmd[0]);
+        else if (id === 'CleanHub01.FireTv' && data.key && params.get('fireTvFail') !== '1') {
+          window.__mock.fireKeys.push(JSON.parse(data.key[0]).name);
+        }
         setTimeout(function () {
           if (params.get('fireTvFail') === '1') {
             fail({ name: 'NotFoundError', message: 'No such app' });
             return;
           }
-          var data = {};
-          control.data.forEach(function (d) { data[d.key] = d.value; });
-          window.__mock.appControls.push({ id: id, operation: control.operation, data: data });
+          if (id !== 'CleanHub01.Home' && !data.key) {
+            window.__mock.appControls.push({ id: id, operation: control.operation, data: data });
+          }
           ok();
         }, 10);
       },
@@ -174,12 +225,29 @@
         setTimeout(function () {
           if (params.get('sourceFail') === '1') { fail({ name: 'SecurityError', message: 'Permission denied' }); return; }
           window.__mock.sources.push(source.type + ' ' + source.number);
+          window.__mock.source = { type: source.type, number: source.number };
           ok(source, 'MAIN');
         }, 10);
+      },
+      getSource: function () {
+        return window.__mock.source;
+      },
+      // ?windowFail=1: the TV won't show its picture in a window.
+      show: function (ok, fail, rect, type, z) {
+        setTimeout(function () {
+          if (params.get('windowFail') === '1') { fail({ name: 'NotSupportedError', message: 'No window' }); return; }
+          window.__mock.tvWindow = { rect: rect, type: type, z: z };
+          ok(rect, type);
+        }, 10);
+      },
+      hide: function (ok, fail, type) {
+        window.__mock.tvWindow = null;
+        if (ok) ok(type);
       }
     },
     tvinputdevice: {
-      registerKey: function () {},
+      registerKey: function (name) { window.__mock.keys[name] = true; },
+      unregisterKey: function (name) { delete window.__mock.keys[name]; },
       getSupportedKeys: function () { return []; }
     }
   };

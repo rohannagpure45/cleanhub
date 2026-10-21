@@ -5,9 +5,11 @@ A quiet home screen for a Samsung Tizen TV, built for a 2022 **QN85B**
 the TV, lets you choose and order them, and opens them with the normal remote.
 
 It is an ordinary Tizen web app (HTML, CSS and JavaScript) installed through
-Samsung's Developer Mode. It does **not** root the TV, edit system files, or
-change what the Home button does. Samsung's own apps and Smart Hub stay
-exactly as they are.
+Samsung's Developer Mode. It does **not** root the TV or edit system files.
+The remote's Home button comes back to Clean Hub anyway: a small background
+service brings it back over Samsung's Smart Hub (see
+[docs/HOME-BUTTON.md](docs/HOME-BUTTON.md)). Samsung's own apps and Smart Hub
+stay as they are, a Settings row away.
 
 ![List layout: Ambient, Fire TV and the apps, each with its own icon](docs/screens/list-dusk.png)
 
@@ -38,8 +40,17 @@ exactly as they are.
   with word-by-word captions, a live comment section, its own phonk, and
   every reel with a sound of its own. ▲▼ scroll, OK pauses, ◀ turns the
   music off (the reels keep their sound), ▶ skips a song, Back goes Home.
+- **Home comes back to Clean Hub.** Press Home on the Samsung remote over
+  Clean Hub or an app, and Clean Hub returns after a moment of Smart Hub.
+  The Netflix button, AirPlay and the TV turning off are told apart from Home.
+  Settings → *Home button: Samsung Home* puts things back as they were;
+  *Open Samsung Home* visits it once. See
+  [docs/HOME-BUTTON.md](docs/HOME-BUTTON.md).
 - **Fire TV on Home.** One press switches the TV to the Fire Stick's HDMI
-  input, full screen, in about 0.3 s.
+  input, full screen, in about 0.3 s. With Settings → *Fire TV picture: In
+  Clean Hub*, Clean Hub shows the stick's picture itself, so Home works over it
+  too. The Samsung remote's arrows, OK, Back and play/pause reach the stick
+  over the network, and the picture blinks twice as it opens.
 - **Fire TV apps on Home.** An app on the Fire Stick (StbEmu, say) can have
   its own item: one press switches to the stick and has it open that app
   (see [docs/TV-SETUP.md](docs/TV-SETUP.md#fire-tv-apps-on-home)).
@@ -80,9 +91,11 @@ side. Every kind of reel, from the split-screen story to the DVD logo:
 
 ### What it can't do
 
-- **The Home button still opens Samsung's Smart Hub.** Remapping it needs
-  root-level changes, which this project deliberately avoids. Clean Hub sits
-  first in Samsung's app bar instead, so it's one press of OK after Home.
+- **Home shows the Smart Hub for a moment** (half a second to a second) before
+  Clean Hub comes back: Samsung keeps the Home key, so Clean Hub can only undo
+  what it does. Over live TV, Samsung's HDMI viewer (Fire TV picture: TV
+  input) or Samsung's own apps, Home stays on the Smart Hub, where Clean Hub
+  is first in the app bar, one press of OK away.
 - **Starting on power-on depends on Samsung's "Autorun Last App".** The TV
   reopens whatever app you used last, so Clean Hub comes back only if it was
   the last app open when the TV went off.
@@ -157,7 +170,8 @@ app/                the .wgt contents that ship to the TV
                     player.js: Ambient's music; walls.js: its moving wallpapers (generated)
                     brainrot.js: the feed's words; reel.js, reel-more.js: its canvas scenes and sounds
                     firetv-apps.js: Fire TV apps on Home (tv.py fills it in the build)
-  service/firetv.js background service (Node.js 12) that opens apps on the Fire TV Stick
+  service/firetv.js background service (Node.js 12) that opens apps on the Fire TV Stick and passes keys to it
+  service/home.js   background service (Node.js 12): the Home watcher
   img/              backgrounds and wallpapers (generated); wall/: the wallpapers' moving layers;
                     apps/: app icons (fetched)
   music/            Ambient's tracks: the originals (playlist.js), a folder and a .js per genre,

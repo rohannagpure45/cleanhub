@@ -983,7 +983,8 @@ test('a stalled track is skipped by the watchdog', async () => {
 // ---- Second review: regressions -----------------------------------------------------
 
 test('a track that fails while the app is hidden is skipped on return, not left silent', async () => {
-  await openAmbient('?music=gap');
+  // With Home button: Clean Hub, back 2 s after a hide would be Home answered (Home closes Ambient).
+  await openAmbient('?music=gap', S({ home: 'samsung' }));
   await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
   await press('ArrowRight'); // controls are already showing: next track (the missing one)
   await page.waitForFunction(() => window.CleanHub.player.state().index === 1);
@@ -1120,7 +1121,7 @@ test('Fire TV apps need Fire TV on Home', async () => {
 test('a build that isn\'t paired with the stick has no Fire TV apps', async () => {
   await open('', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
   assert.deepEqual((await homeNames()).slice(0, 2), ['Fire TV', 'Netflix']);
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.__mock.ports)), [], 'no message port either');
+  assert.equal(await page.evaluate(() => 'firetv' in window.__mock.ports), false, 'no Fire TV message port either');
 });
 
 test('the stick\'s failure is told when Clean Hub comes back', async () => {

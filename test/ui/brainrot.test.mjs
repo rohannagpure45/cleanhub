@@ -164,7 +164,8 @@ test('Back leaves the feed: drawing and music stop', async () => {
 });
 
 test('the feed stops while the TV hides the app and carries on after', async () => {
-  await openFeed(S({ music: 'off' }));
+  // With Home button: Clean Hub, back this soon would be Home answered (Home closes the feed).
+  await openFeed(S({ music: 'off', home: 'samsung' }));
   await page.evaluate(() => window.__mock.goHidden());
   const t = (await app()).reel.t;
   await page.waitForTimeout(300);

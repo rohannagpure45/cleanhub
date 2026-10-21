@@ -14,7 +14,7 @@
     loaded: false, // some app list (cached or live) is showing
     fresh: false, // the TV has answered (or failed) at least once
     error: null,
-    screen: 'home', // 'home' | 'settings' | 'apps' | 'music' | 'ambient'
+    screen: 'home', // 'home' | 'settings' | 'apps' | 'music' | 'ambient' | 'source' (Fire TV picture)
     homeIndex: 0, // the focused (or, on Settings, last focused) app
     homeOnGear: false, // Settings button has focus
     settingsIndex: 0,
@@ -220,7 +220,9 @@
     if (!entry) return;
     cancelSwitch();
     CH.ui.pressHome(state.homeIndex);
+    leave('app', entry);
     CH.platform.launch(entry.id).catch(function () {
+      stayed();
       CH.ui.toast('Couldn’t open ' + entry.name);
     });
   }
@@ -285,6 +287,7 @@
     }
     // The input list covers every input, so one fetch serves any choice.
     if (next.input !== 'off' && (prev.input === 'off' || !inputs)) prefetchInputs();
+    if (next.home !== prev.home) applyHome();
   }
 
   function onSettingsKey(key) {
@@ -309,6 +312,10 @@
     }
     if (row === 'music') {
       if (key === 'ok' || key === 'right') openMusic();
+      return;
+    }
+    if (row === 'samsung') {
+      if (key === 'ok') openSamsungHome();
       return;
     }
     if (row === 'reset') {
@@ -602,11 +609,14 @@
       });
       if (!source) throw new Error(label + ' isn’t on this TV');
       return CH.platform.setSource(source).then(function () {
+        sourceShown = CH.platform.sourceNow();
         if (!stillWanted(id)) return null;
         CH.ui.clearToast();
         if (app) openOnFireTv(app);
+        if (pictureInHub()) return showSource(label, app);
+        leave('input');
         return CH.platform.launch(TV_VIEWER).catch(function () {
-          if (stillWanted(id)) CH.platform.hide();
+          if (stillWanted(id) && !CH.platform.hide()) stayed();
         });
       });
     }).catch(function () {
@@ -614,7 +624,105 @@
     }).then(done, done);
   }
 
+  // ---- Fire TV picture in Clean Hub ------------------------------------------------
+
+  // A short record of what the Home button and the Fire TV picture did, for
+  // tv-inspect.mjs (CleanHub.main.trace()).
+  const traceLog = [];
+  function trace(ev, extra) {
+    traceLog.push(Object.assign({ t: Date.now(), ev: ev }, extra || {}));
+    if (traceLog.length > 80) traceLog.shift();
+  }
+
+  // Settings → Fire TV picture: In Clean Hub. Instead of handing the screen to
+  // Samsung's TV viewer, Clean Hub shows the input's picture itself (behind a
+  // see-through page), so it stays the app on screen and the Home watcher
+  // sees Home. The remote's keys come to Clean Hub then, not the stick, so
+  // they're passed on over the network (arrows, OK, Back, play/pause).
+  // About 2 s in, the stick claims the TV over HDMI-CEC and the TV viewer
+  // takes the screen; the watcher brings Clean Hub straight back, and coming
+  // back that soon keeps the picture (later, it was Home: Clean Hub's Home).
+  const TAKEOVER_MS = 6000;
+  let sourceAt = 0; // when the picture last showed, or the stick was woken
+  let sourceShown = null; // the TV's input while Clean Hub is (or was last) on screen
+  let sourceBefore = null; // ...as it was before Clean Hub's latest return
+
+  function pictureInHub() {
+    return state.settings.firetvView === 'hub' && homeOn();
+  }
+
+  // Home stays on screen until the picture is ready behind it (see-through
+  // any sooner, the screen would go black for a moment).
+  // The Fire TV tile shows the stick's own Home screen (the remote's Home
+  // button is Clean Hub's, so there's no other way there); an app's tile
+  // opens that app instead.
+  function showSource(label, app) {
+    listenFireTv(); // the service says when it can't reach the stick
+    state.screen = 'source';
+    expectTakeover();
+    CH.platform.takeMediaKeys(true);
+    CH.platform.screenSaver(false);
+    CH.platform.fireTvKey('wake');
+    if (!app) CH.platform.fireTvKey('home');
+    trace('picture-open', { app: app ? app.package : null });
+    return showPicture().catch(function () {
+      if (state.screen !== 'source') return;
+      closeSource();
+      CH.ui.toast('Couldn’t show ' + label + ' in Clean Hub');
+    });
+  }
+
+  // The stick is about to claim the TV (the picture just showed, or it was
+  // woken): coming back within TAKEOVER_MS keeps the picture, and the watcher
+  // brings Clean Hub back even if it only just did.
+  function expectTakeover() {
+    sourceAt = Date.now();
+    CH.platform.tellHome({ do: 'picture', ms: TAKEOVER_MS });
+  }
+
+  // Shows the picture, then turns the page see-through over it. The TV
+  // answers late; if the picture was closed meanwhile, it must not come back
+  // behind Home (its sound would play on). Asked once per opening: the TV
+  // keeps it while another app is in front, and each new show is a fresh
+  // reason for the stick to claim the TV.
+  let showing = null;
+
+  function showPicture() {
+    if (showing) return showing;
+    const done = function () { showing = null; };
+    showing = CH.platform.showTvWindow().then(function () {
+      trace('picture-shown', { open: state.screen === 'source' });
+      if (state.screen !== 'source') CH.platform.hideTvWindow();
+      else if (!doc.hidden) CH.ui.showSource(true);
+    });
+    showing.then(done, done);
+    return showing;
+  }
+
+  function closeSource() {
+    trace('picture-close');
+    state.screen = 'home';
+    CH.platform.hideTvWindow();
+    CH.platform.takeMediaKeys(false);
+    CH.platform.screenSaver(true);
+    CH.ui.showSource(false);
+    CH.ui.focusHome(state.homeIndex, onGear());
+  }
+
+  // Keys go to the stick. (Holding Back can't be the stick's Home: on a
+  // Samsung remote, that's the TV's own "close this app".)
+  function onSourceKey(key) {
+    CH.platform.fireTvKey(key);
+  }
+
   // ---- Fire TV apps -------------------------------------------------------------
+
+  let fireTvHeard = false;
+  let fireTvReport = null; // the last keys' timings (CleanHub.main.fireTvReport())
+
+  function listenFireTv() {
+    if (!fireTvHeard) fireTvHeard = CH.platform.onFireTv(onFireTvResult);
+  }
 
   // The stick's answer usually arrives with the TV viewer in front, so a
   // failure waits to be told until Clean Hub is back, if that's soon enough
@@ -648,6 +756,19 @@
 
   function onFireTvResult(result) {
     if (!result) return;
+    if (result.kind === 'key-report') {
+      fireTvReport = result.keys;
+      return;
+    }
+    if (result.kind === 'key') {
+      // Waking the stick can make it claim the TV again (see TAKEOVER_MS).
+      if (result.state === 'woke' && state.screen === 'source') expectTakeover();
+      else if (state.screen === 'source') {
+        fireTvSay(result.state === 'unpaired' ? 'The Fire TV isn’t paired with Clean Hub (tv.py firetv pair)'
+          : 'Couldn’t reach the Fire TV');
+      }
+      return;
+    }
     if (result.state === 'opened') {
       fireTvNote = null;
       return;
@@ -659,6 +780,151 @@
     fireTvSay(result.state === 'unpaired'
       ? 'The Fire TV isn’t paired with Clean Hub (tv.py firetv pair)'
       : 'Couldn’t reach the Fire TV to open ' + name);
+  }
+
+  // ---- Home button ---------------------------------------------------------------
+
+  // The Home watcher (service/home.js) brings Clean Hub back when the remote's
+  // Home button opens Samsung's Smart Hub. Clean Hub tells it whenever it
+  // steps aside on purpose (an app, an input, Samsung Home), so that only a
+  // hide nobody announced counts as Home.
+  const LEAVE_MS = 10000; // an announced leave explains a hide this soon after
+  // Back this soon after such a hide, the watcher answered Home: its message
+  // and the relaunch take a quarter of a second at the very least (0.6-1.5 s
+  // on the QN85B), so anything quicker was something else.
+  const QUICK_BACK_MS = [250, 3000];
+  let leaving = 0; // when Clean Hub last announced stepping aside
+  let unannounced = false; // hidden without having said why: Home, most likely
+  let hiddenAt = 0;
+  let asked = false; // waiting to hear whether the watcher brought Clean Hub back
+  let homeReport = null; // the watcher's last report (CleanHub.main.homeReport())
+
+  function homeOn() {
+    return state.settings.home === 'cleanhub';
+  }
+
+  function leave(to, entry) {
+    leaving = Date.now();
+    if (homeOn()) {
+      CH.platform.tellHome({ do: 'leaving', to: to, id: entry ? entry.id : null, name: entry ? entry.name : null });
+    }
+  }
+
+  // An announced leave that didn't happen: Clean Hub is still on screen.
+  function stayed() {
+    if (!leaving) return;
+    leaving = 0;
+    if (homeOn() && !doc.hidden) CH.platform.tellHome({ do: 'shown' });
+  }
+
+  // Starts or stops the watcher to match the setting. Stopping starts it
+  // too if need be: it remembers the choice for when the TV boots. Starting
+  // asks whether it just brought Clean Hub back (a fresh start after Home).
+  function applyHome() {
+    if (!homeOn()) {
+      CH.platform.tellHome({ do: 'watch', on: false });
+      return;
+    }
+    asked = !doc.hidden;
+    CH.platform.tellHome(doc.hidden ? { do: 'wake' } : { do: 'shown', ask: true });
+  }
+
+  function onHomeMessage(key, value) {
+    if (key === 'report') homeReport = value;
+    else if (key === 'back' && asked) {
+      asked = false;
+      brought();
+    }
+  }
+
+  // The watcher just brought Clean Hub back over whatever took the screen.
+  // Right after the Fire TV picture showed, that was the stick claiming the
+  // TV: keep the picture. If the TV's input changed meanwhile, the viewer
+  // picked another input (Source button): show it. Otherwise it was Home.
+  function brought() {
+    if (state.screen === 'source' && Date.now() - sourceAt < TAKEOVER_MS) {
+      trace('brought', { as: 'takeover' });
+      CH.ui.showSource(true); // the TV kept the picture
+      return;
+    }
+    const now = CH.platform.sourceNow();
+    if (now && sourceBefore && now !== sourceBefore && state.screen !== 'source') {
+      trace('brought', { as: 'input', from: sourceBefore, to: now });
+      leave('input');
+      CH.platform.launch(TV_VIEWER).catch(stayed);
+      return;
+    }
+    trace('brought', { as: 'home', screen: state.screen });
+    backHome();
+  }
+
+  // Clean Hub is closing (the TV's app manager, or an install), which hides
+  // the page just before: not Home.
+  function homeClosing() {
+    if (homeOn()) CH.platform.tellHome({ do: 'closing' });
+  }
+
+  // Back on screen moments after a hide nobody announced, the watcher has
+  // answered Home: Clean Hub shows Home at once (waiting to be told would show
+  // the old screen for half a second). Back later, it asks the watcher
+  // ('back' comes if it was that, rather than, say, the TV waking up).
+  function homeVisibility() {
+    if (!homeOn()) return;
+    if (!doc.hidden) {
+      sourceBefore = sourceShown;
+      sourceShown = CH.platform.sourceNow();
+      leaving = 0;
+      const away = Date.now() - hiddenAt;
+      const quick = unannounced && away >= QUICK_BACK_MS[0] && away < QUICK_BACK_MS[1];
+      asked = unannounced && !quick;
+      CH.platform.tellHome({ do: 'shown', ask: asked, at: Date.now() });
+      trace('shown', { away: unannounced ? away : null, quick: quick, screen: state.screen });
+      // The Fire TV picture, gone a while for reasons unknown: Home, rather
+      // than keys going to a stick nobody can see.
+      if (unannounced && !quick && state.screen === 'source') closeSource();
+      unannounced = false;
+      if (quick) brought();
+    } else if (leaving && Date.now() - leaving < LEAVE_MS) {
+      trace('hidden', { announced: true });
+      leaving = 0;
+    } else {
+      unannounced = true;
+      hiddenAt = Date.now();
+      CH.platform.tellHome({ do: 'hidden', at: hiddenAt });
+      trace('hidden', { screen: state.screen });
+    }
+  }
+
+  // Settings → Open Samsung Home: steps aside for Samsung's own Home, which
+  // the watcher then leaves alone.
+  function openSamsungHome() {
+    closeSettings();
+    leave('samsung');
+    if (!CH.platform.hide()) {
+      stayed();
+      CH.ui.toast('Couldn’t open Samsung Home');
+    }
+  }
+
+  // Home brought Clean Hub back: show Home, as a home screen would, dropping
+  // an unfinished move in Apps on Home.
+  function backHome() {
+    if (state.screen === 'ambient') {
+      closeAmbient();
+      return;
+    }
+    if (state.screen === 'source') {
+      closeSource();
+      return;
+    }
+    if (state.screen === 'home') return;
+    if (state.moving !== -1 && state.settings.apps !== state.movingSaved) {
+      setApps(state.movingSaved);
+      arrangeHome();
+    }
+    endMove();
+    renderHome(null);
+    closeSettings();
   }
 
   // ---- Ambient ----------------------------------------------------------------
@@ -985,6 +1251,7 @@
     else if (state.screen === 'settings') onSettingsKey(key);
     else if (state.screen === 'apps') onAppsKey(key);
     else if (state.screen === 'music') onMusicKey(key);
+    else if (state.screen === 'source') onSourceKey(key);
   }
 
   function onKeyUp(event) {
@@ -994,14 +1261,20 @@
   // Coming back from another app: the app list may have changed, and timers
   // were paused while hidden.
   function onVisibility() {
+    homeVisibility(); // first: the page may stop running soon after it's hidden
     clearHeld();
     if (doc.hidden) {
       cancelSwitch();
       CH.player.suspend();
       CH.reel.suspend();
-      if (state.screen === 'ambient') CH.platform.screenSaver(true);
+      if (state.screen === 'ambient' || state.screen === 'source') CH.platform.screenSaver(true);
+      // Opaque while away (coming back after Home, Clean Hub's Home shows at
+      // once), except while the stick is expected to take the TV: then the
+      // picture carries on straight through Clean Hub's return.
+      if (state.screen === 'source' && Date.now() - sourceAt >= TAKEOVER_MS) CH.ui.showSource(false);
       return;
     }
+    if (state.screen === 'source') CH.platform.screenSaver(false);
     tick();
     refreshApps();
     prefetchInputs();
@@ -1036,7 +1309,11 @@
     doc.addEventListener('keyup', onKeyUp);
     doc.addEventListener('visibilitychange', onVisibility);
     root.addEventListener('blur', clearHeld);
-    if (FIRE_APPS.length) CH.platform.onFireTv(onFireTvResult);
+    if (FIRE_APPS.length) listenFireTv();
+    CH.platform.onHome(onHomeMessage);
+    root.addEventListener('pagehide', homeClosing);
+    sourceShown = CH.platform.sourceNow();
+    applyHome();
     // Let the first frame and key presses through before the slow app list.
     root.setTimeout(function () {
       refreshApps();
@@ -1044,6 +1321,13 @@
     }, cached ? 600 : 0);
   }
 
-  CH.main = { state: state, start: start, version: VERSION };
+  CH.main = {
+    state: state,
+    start: start,
+    version: VERSION,
+    homeReport: function () { return homeReport; },
+    trace: function () { return traceLog.slice(); },
+    fireTvReport: function () { return fireTvReport; }
+  };
   start();
 })(window);

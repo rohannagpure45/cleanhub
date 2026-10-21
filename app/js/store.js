@@ -24,6 +24,8 @@
     motion: 'on', // the wallpaper's layers move
     music: genreIds(), // Ambient's genres, ticked in Settings; [] = no music
     input: 'off', // which HDMI input the Home 'Fire TV' item switches to
+    firetvView: 'tv', // Fire TV in Samsung's TV viewer, or inside Clean Hub
+    home: 'cleanhub', // what the remote's Home button opens
     brainrot: 'off', // Ambient shows the brainrot feed instead of the wallpaper
     brainrotMusic: 'on', // its soundtrack; the reels' own sounds play either way
     apps: null // null = not chosen yet; the home screen picks recognised apps

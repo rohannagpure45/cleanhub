@@ -53,8 +53,10 @@ python3 scripts/tv.py install                        # build, sign, install, ope
 
 1. **Pin it first.** Press Home. In the app row (or Apps), highlight
    **Clean Hub**, press **Down**, choose **Add to Home** or **Move**, move it to
-   the first spot, and press Select. After pressing Home, Clean Hub is then one
-   press of OK away.
+   the first spot, and press Select. Home normally brings Clean Hub back by
+   itself ([HOME-BUTTON.md](HOME-BUTTON.md)); where it can't (live TV, an HDMI
+   input in Samsung's viewer, Samsung's own apps), Clean Hub is then one press
+   of OK away.
 2. **Start screen.** Settings → All Settings → General & Privacy →
    **Start Screen Options**:
    - Turn **off** *Start with Smart Hub Home*.
@@ -76,6 +78,14 @@ switches the TV to that input and hands the screen to Samsung's own TV viewer,
 so the Fire TV remote (or the Samsung remote, with Anynet+ on) drives the
 stick. To come back, press Home on the Samsung remote: Clean Hub is first in
 the app bar.
+
+**Fire TV picture: In Clean Hub** (Settings, below Fire TV on Home) shows the
+stick inside Clean Hub instead, so Home comes straight back to Clean Hub. The
+Samsung remote's arrows, OK, Back and play/pause reach the stick over the
+network; number and channel keys don't. The Fire TV tile opens the stick's
+own Home screen. The picture blinks black twice in its first few seconds,
+while the stick claims the TV over HDMI-CEC and Clean Hub takes it back. See
+[HOME-BUTTON.md](HOME-BUTTON.md#fire-tv-and-home-over-it).
 
 The TV takes about 3 seconds to list its inputs, so Clean Hub asks when it
 starts and whenever it comes back to the front. Pressing OK then switches in

@@ -5,8 +5,12 @@
   const CH = root.CleanHub = root.CleanHub || {};
 
   // Remote keys by keyCode. 10009 is the Samsung remote's Back key; Escape and
-  // Backspace stand in for it in a desktop browser.
+  // Backspace stand in for it in a desktop browser. The media keys only arrive
+  // while registered (takeMediaKeys), for the Fire TV picture.
   const KEYS = {
+    10252: 'play', // MediaPlayPause
+    415: 'play', // MediaPlay
+    19: 'play', // MediaPause
     37: 'left',
     38: 'up',
     39: 'right',
@@ -215,6 +219,138 @@
     }
   }
 
+  // ---- Fire TV picture in Clean Hub --------------------------------------------
+
+  const FIRETV_KEY_PORT = 'firetv-key';
+  const MEDIA_KEYS = ['MediaPlayPause', 'MediaPlay', 'MediaPause'];
+
+  // Tells one of Clean Hub's services something, starting it if need be, by
+  // app control: on the QN85B that reaches a service in 25-150 ms, where a
+  // message port takes 0.3-1.9 s. (Never so to the page itself: an app
+  // control relaunch reloads it.) A message port is the fallback. Messages
+  // are numbered: the TV can hand a service the newest app control twice in
+  // place of an older one.
+  const RUN = Date.now();
+  let sent = 0;
+
+  function tellService(service, port, key, message) {
+    const t = tizen();
+    if (!onTV()) return false;
+    const value = JSON.stringify(Object.assign({ run: RUN, seq: ++sent }, message));
+    try {
+      const control = new t.ApplicationControl('http://tizen.org/appcontrol/operation/default', null, null, null,
+        [new t.ApplicationControlData(key, [value])]);
+      t.application.launchAppControl(control, service, function () {}, function () {});
+      return true;
+    } catch (e) {
+      // No app controls here: try the port.
+    }
+    try {
+      t.messageport.requestRemoteMessagePort(service, port).sendMessage([{ key: key, value: value }]);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Passes a remote key ('up', 'ok', 'play', …, or 'wake' ahead of the first)
+  // to the Fire TV service, which sends it on to the stick.
+  function fireTvKey(name) {
+    return tellService(FIRETV_SERVICE, FIRETV_KEY_PORT, 'key', { name: name, at: Date.now() });
+  }
+
+  // Shows the TV's main picture (the input setSource chose) full screen,
+  // behind the page, which must be see-through there.
+  function showTvWindow() {
+    return new Promise(function (resolve, reject) {
+      const timer = root.setTimeout(function () {
+        reject(new Error('The TV did not show the picture'));
+      }, TIMEOUT_MS);
+      try {
+        tizen().tvwindow.show(function () {
+          root.clearTimeout(timer);
+          resolve();
+        }, function (err) {
+          root.clearTimeout(timer);
+          reject(new Error(err && err.message ? err.message : 'tvwindow.show failed'));
+        }, ['0px', '0px', '1920px', '1080px'], 'MAIN', 'BEHIND');
+      } catch (e) {
+        root.clearTimeout(timer);
+        reject(e);
+      }
+    });
+  }
+
+  function hideTvWindow() {
+    try {
+      tizen().tvwindow.hide(function () {}, function () {}, 'MAIN');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // The TV's current main input, e.g. 'HDMI 4'; null where it can't say.
+  function sourceNow() {
+    try {
+      const s = tizen().tvwindow.getSource();
+      return s ? s.type + ' ' + s.number : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Play/pause only reaches the page while registered.
+  function takeMediaKeys(on) {
+    try {
+      const input = tizen().tvinputdevice;
+      MEDIA_KEYS.forEach(function (name) {
+        try {
+          if (on) input.registerKey(name);
+          else input.unregisterKey(name);
+        } catch (e) {
+          // This TV doesn't have that key.
+        }
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Clean Hub's Home watcher (service/home.js), which brings Clean Hub back
+  // when the remote's Home button opens Samsung's Smart Hub. The TV also
+  // starts it when it boots (config.xml, on-boot).
+  const HOME_SERVICE = 'CleanHub01.Home';
+  const HOME_PORT = 'home';
+
+  // Tells the Home watcher something (starting it if need be).
+  function tellHome(cmd) {
+    return tellService(HOME_SERVICE, HOME_PORT, 'cmd', cmd);
+  }
+
+  // Calls `listener(key, value)` for each message from the Home watcher:
+  // 'back' (it just brought Clean Hub back after Home) or 'report' (its state
+  // and recent decisions, for tv-inspect.mjs).
+  function onHome(listener) {
+    try {
+      tizen().messageport.requestLocalMessagePort(HOME_PORT).addMessagePortListener(function (data) {
+        (data || []).forEach(function (d) {
+          let value;
+          try {
+            value = JSON.parse(d.value);
+          } catch (e) {
+            return; // garbled: nothing to act on
+          }
+          listener(d.key, value);
+        });
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Steps aside so the TV shows its main picture (and the remote reaches the
   // device on it); Clean Hub keeps running in the background.
   function hide() {
@@ -272,6 +408,13 @@
     setSource: setSource,
     openOnFireTv: openOnFireTv,
     onFireTv: onFireTv,
+    fireTvKey: fireTvKey,
+    showTvWindow: showTvWindow,
+    hideTvWindow: hideTvWindow,
+    sourceNow: sourceNow,
+    takeMediaKeys: takeMediaKeys,
+    tellHome: tellHome,
+    onHome: onHome,
     hide: hide,
     screenSaver: screenSaver,
     iconUrl: iconUrl,

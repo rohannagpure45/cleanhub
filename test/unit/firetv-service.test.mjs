@@ -105,6 +105,101 @@ test('gives up at the deadline and says why', async () => {
   assert.ok(stick.io.now() <= service.DEADLINE_MS + 1000, 'stops near the deadline');
 });
 
+// ---- Remote keys (Fire TV picture in Clean Hub) ------------------------------
+
+// A stick answering keys from a script (the last answer repeats), each
+// answer released by the test, so ordering and queueing show.
+function keyStick({ answers = [{ status: 200 }], wake = [{ status: 201 }] } = {}) {
+  const log = [];
+  const told = [];
+  const waiting = [];
+  const next = (list) => (list.length > 1 ? list.shift() : list[0]);
+  const io = {
+    now: () => Date.now(),
+    key: (host, token, name) => new Promise((resolve, reject) => {
+      log.push(`key ${name}`);
+      const a = next(answers);
+      waiting.push(() => (a instanceof Error ? reject(a) : resolve(a)));
+    }),
+    wake: () => {
+      log.push('wake');
+      const a = next(wake);
+      return a instanceof Error ? Promise.reject(a) : Promise.resolve(a);
+    }
+  };
+  const tick = () => new Promise((r) => setImmediate(r));
+  // Answers the key in flight (if any), then lets the next one start.
+  const answer = async () => {
+    await tick();
+    if (waiting.length) waiting.shift()();
+    await tick();
+    await tick();
+  };
+  return { io, log, told, answer, report: (r) => told.push(r.state) };
+}
+
+test('keys go to the stick one at a time, in the order pressed', async () => {
+  const stick = keyStick();
+  const keys = service.createKeys(stick.io, PAIRED, stick.report);
+  keys.press('down');
+  keys.press('down');
+  keys.press('ok');
+  await stick.answer();
+  assert.deepEqual(stick.log, ['key down', 'key down'], 'the second waits for the first');
+  await stick.answer();
+  await stick.answer();
+  assert.deepEqual(stick.log, ['key down', 'key down', 'key ok']);
+  assert.deepEqual(stick.told, []);
+});
+
+test('a held arrow doesn\'t pile up: keys beyond a few waiting are dropped, oldest first', async () => {
+  const stick = keyStick();
+  const keys = service.createKeys(stick.io, PAIRED, stick.report);
+  for (let i = 0; i < 8; i++) keys.press(i < 7 ? 'right' : 'ok');
+  for (let i = 0; i < 5; i++) await stick.answer();
+  assert.equal(stick.log.length, 1 + service.KEY_QUEUE, 'the one in flight, then the newest few');
+  assert.equal(stick.log.at(-1), 'key ok', 'the last key pressed still goes');
+});
+
+test('a stick that stopped answering is woken and the key sent again; the page hears', async () => {
+  const stick = keyStick({ answers: [new Error('no answer in 1500 ms'), { status: 200 }] });
+  const keys = service.createKeys(stick.io, PAIRED, stick.report);
+  keys.press('up');
+  await stick.answer();
+  await stick.answer();
+  assert.deepEqual(stick.log, ['key up', 'wake', 'key up']);
+  assert.deepEqual(stick.told, ['woke'], 'it may take the TV\'s screen now (HDMI-CEC)');
+});
+
+test('a stick that can\'t be reached is reported, and waiting keys are dropped', async () => {
+  const stick = keyStick({ answers: [new Error('connect EHOSTUNREACH')], wake: [new Error('connect EHOSTUNREACH')] });
+  const keys = service.createKeys(stick.io, PAIRED, stick.report);
+  keys.press('up');
+  keys.press('down');
+  await stick.answer();
+  await stick.answer();
+  assert.deepEqual(stick.told, ['unreachable']);
+  assert.deepEqual(stick.log, ['key up', 'wake']);
+});
+
+test('a refused token stops the keys and says the pairing is gone', async () => {
+  const stick = keyStick({ answers: [{ status: 403 }] });
+  const keys = service.createKeys(stick.io, PAIRED, stick.report);
+  keys.press('ok');
+  keys.press('back');
+  await stick.answer();
+  assert.deepEqual(stick.told, ['unpaired']);
+  assert.deepEqual(stick.log, ['key ok']);
+});
+
+test('without a pairing, or for a key the stick has no use for, nothing is sent', async () => {
+  const stick = keyStick();
+  service.createKeys(stick.io, null, stick.report).press('ok');
+  service.createKeys(stick.io, PAIRED, stick.report).press('volume_up');
+  assert.deepEqual(stick.log, []);
+  assert.deepEqual(stick.told, ['unpaired']);
+});
+
 // ---- Real requests -------------------------------------------------------------
 
 function listen(server) {
@@ -166,5 +261,44 @@ test('a stick that accepts the connection but never answers times out', async ()
   } finally {
     sockets.forEach((s) => s.destroy());
     silent.close();
+  }
+});
+
+test('each key\'s trip is timed: to the service, and on to the stick', async () => {
+  const stick = keyStick();
+  const keys = service.createKeys(stick.io, PAIRED, stick.report);
+  keys.press('ok', Date.now() - 40);
+  await stick.answer();
+  const [t] = keys.timings();
+  assert.equal(t.name, 'ok');
+  assert.ok(t.wait >= 40, String(t.wait));
+  assert.equal(t.result, 'sent');
+  assert.equal(typeof t.ms, 'number');
+});
+
+test('keys reuse one connection to the stick, and a failure drops it', { skip: !hasOpenssl && 'needs openssl' }, async () => {
+  const sockets = new Set();
+  let fail = false;
+  const api = https.createServer(selfSigned(), (req, res) => {
+    if (fail) {
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('{"description":"OK"}');
+  });
+  api.on('secureConnection', (s) => sockets.add(s));
+  const port = await listen(api);
+  try {
+    const io = service.transport({ api: port });
+    for (const name of ['up', 'down', 'ok']) assert.equal((await io.key('127.0.0.1', 'Tok3n', name)).status, 200);
+    assert.equal(sockets.size, 1, 'one TLS connection for three keys');
+    fail = true;
+    await assert.rejects(io.key('127.0.0.1', 'Tok3n', 'back'));
+    fail = false;
+    assert.equal((await io.key('127.0.0.1', 'Tok3n', 'back')).status, 200);
+    assert.equal(sockets.size, 2, 'a fresh connection after the failure');
+  } finally {
+    api.close();
   }
 });

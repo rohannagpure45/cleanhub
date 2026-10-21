@@ -64,6 +64,20 @@
       { id: 'hdmi3', name: 'HDMI 3' },
       { id: 'hdmi4', name: 'HDMI 4' }
     ],
+    // How Fire TV on Home shows the stick: in Samsung's TV viewer (the remote
+    // reaches the stick over HDMI-CEC; Home opens the Smart Hub), or inside
+    // Clean Hub (Home comes back to Clean Hub; arrows, OK, Back and play/pause
+    // reach the stick over the network). Inside needs Home button: Clean Hub.
+    firetvView: [
+      { id: 'tv', name: 'TV input' },
+      { id: 'hub', name: 'In Clean Hub' }
+    ],
+    // What the remote's Home button opens: Clean Hub (service/home.js brings
+    // it back over Samsung's Smart Hub) or Samsung's own Home.
+    home: [
+      { id: 'cleanhub', name: 'Clean Hub' },
+      { id: 'samsung', name: 'Samsung Home' }
+    ],
     brainrot: [
       { id: 'off', name: 'Off' },
       { id: 'on', name: 'On' }
@@ -105,6 +119,9 @@
     { id: 'motion', label: 'Wallpaper motion' },
     { id: 'music', kind: 'action', label: 'Ambient music' },
     { id: 'input', label: 'Fire TV on Home' },
+    { id: 'firetvView', label: 'Fire TV picture' },
+    { id: 'home', label: 'Home button' },
+    { id: 'samsung', kind: 'action', label: 'Open Samsung Home' },
     { id: 'reset', kind: 'action', label: 'Reset to defaults' },
     { id: 'brainrot', label: 'Brainrot mode' } // Ambient becomes a TikTok-style feed
   ];

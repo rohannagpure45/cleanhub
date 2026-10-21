@@ -71,14 +71,21 @@ export function problems() {
   if (pkg.version !== m.version) out.push(`package.json version ${pkg.version} != config.xml ${m.version}`);
   if (!main || main[1] !== m.version) out.push(`main.js VERSION ${main && main[1]} != config.xml ${m.version}`);
   if (!self || self[1] !== m.packageId + '.') out.push(`apps.js selfIdPrefix ${self && self[1]} != "${m.packageId}."`);
-  // The page starts the Fire TV service by id, and the service answers the page by id.
+  // The page starts each background service by id, and each answers the page by id.
   const xml = readFileSync(ROOT + 'app/config.xml', 'utf8');
-  const service = (xml.match(/<tizen:service\s+id="([^"]+)"/) || [])[1];
-  const asked = (readFileSync(ROOT + 'app/js/platform.js', 'utf8').match(/const FIRETV_SERVICE = '([^']+)'/) || [])[1];
-  const answers = (readFileSync(ROOT + 'app/service/firetv.js', 'utf8').match(/const UI_APP = '([^']+)'/) || [])[1];
-  if (!service || service.indexOf(m.packageId + '.') !== 0) out.push(`service id "${service}" must start with "${m.packageId}."`);
-  if (asked !== service) out.push(`platform.js FIRETV_SERVICE ${asked} != config.xml service ${service}`);
-  if (answers !== m.appId) out.push(`service/firetv.js UI_APP ${answers} != ${m.appId}`);
+  const platform = readFileSync(ROOT + 'app/js/platform.js', 'utf8');
+  const services = [...xml.matchAll(/<tizen:service\s+id="([^"]+)"[^>]*>\s*<tizen:content\s+src="([^"]+)"/g)];
+  if (services.length !== 2) out.push(`config.xml declares ${services.length} services; expected Fire TV and Home`);
+  for (const [, id, src] of services) {
+    if (id.indexOf(m.packageId + '.') !== 0) out.push(`service id "${id}" must start with "${m.packageId}."`);
+    if (!platform.includes(`_SERVICE = '${id}';`)) out.push(`platform.js has no *_SERVICE constant for ${id}`);
+    if (!existsSync(ROOT + 'app/' + src)) {
+      out.push(`service ${id}: app/${src} is missing`);
+      continue;
+    }
+    const answers = (readFileSync(ROOT + 'app/' + src, 'utf8').match(/const UI_APP = '([^']+)'/) || [])[1];
+    if (answers !== m.appId) out.push(`app/${src} UI_APP ${answers} != ${m.appId}`);
+  }
   for (const f of ['index.html', 'icon.png', 'css/fonts.css', 'img/bg-dusk.jpg']) {
     if (!existsSync(ROOT + 'app/' + f)) out.push(`app/${f} is missing (run the asset scripts)`);
   }

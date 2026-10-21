@@ -44,6 +44,12 @@
 
   // ---- Look --------------------------------------------------------------
 
+  // The Fire TV picture inside Clean Hub: the page turns see-through (the
+  // TV's picture is behind it), keeping only the toast.
+  function showSource(on) {
+    doc.documentElement.setAttribute('data-source', on ? 'on' : 'off');
+  }
+
   function applyLook(settings) {
     const html = doc.documentElement;
     html.setAttribute('data-theme', settings.theme);
@@ -456,6 +462,7 @@
       let row;
       if (r.id === 'apps') row = actionRow('apps', r.label, count);
       else if (r.id === 'music') row = actionRow('music', r.label, ctx.musicLabel);
+      else if (r.id === 'samsung') row = actionRow('samsung', r.label, '');
       else if (r.id === 'reset') row = actionRow('reset', ctx.confirmReset ? 'Press OK again to reset everything' : r.label, '', true);
       else row = optionRow(r.id, r.label, settings);
       addRow(row, i === focusIndex);
@@ -927,6 +934,7 @@
   CH.ui = {
     init: init,
     applyLook: applyLook,
+    showSource: showSource,
     warmImages: warmImages,
     formatClock: formatClock,
     updateClock: updateClock,

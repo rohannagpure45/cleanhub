@@ -55,6 +55,17 @@ body {
   cursor: none;
 }
 
+/* The Fire TV picture inside Clean Hub (tvwindow, behind the page): nothing
+   but the toast in front of it. */
+html[data-source="on"],
+html[data-source="on"] body {
+  background: transparent;
+}
+
+html[data-source="on"] body > :not(.toast) {
+  visibility: hidden;
+}
+
 body {
   position: relative;
   font-family: var(--font);
