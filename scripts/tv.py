@@ -273,8 +273,13 @@ def connect(tv):
     Mac network change leaves a stale 'already connected' entry behind."""
     serial = f"{tv}:{SDB_PORT}"
     run([SDB, "disconnect", serial], timeout=15)
-    _, out = run([SDB, "connect", serial], timeout=30)
-    _, devices = run([SDB, "devices"], timeout=15)
+    out = devices = ""
+    for attempt in range(3):  # right after a disconnect the first try can fail
+        _, out = run([SDB, "connect", serial], timeout=30)
+        _, devices = run([SDB, "devices"], timeout=15)
+        if re.search(rf"^{re.escape(serial)}\s+device\b", devices, re.M):
+            return
+        time.sleep(2)
     if not re.search(rf"^{re.escape(serial)}\s+device\b", devices, re.M):
         fail(f"Couldn't connect to the TV over sdb:\n{out.strip()}\n{devices.strip()}\n"
              "Run doctor to see why (usually Developer Mode, the Host PC IP, or a TV that needs a full restart).")
