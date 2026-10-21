@@ -87,7 +87,7 @@
     const name = info.name.trim();
     return {
       id: info.id,
-      name: app ? app.name : name,
+      name: app && app.name ? app.name : name, // a catalog entry without a name keeps the TV's
       key: app ? app.key : null,
       icon: typeof info.iconPath === 'string' && info.iconPath ? info.iconPath : null,
       mono: app ? app.mono : monogram(name),

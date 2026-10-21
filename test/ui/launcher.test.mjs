@@ -31,7 +31,7 @@ beforeEach(async () => {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 });
 
-const DEFAULT_HOME = ['Netflix', 'YouTube', 'Prime Video', 'Disney+', 'Max', 'Plex', 'Tubi', 'Spotify'];
+const DEFAULT_HOME = ['Netflix', 'YouTube', 'Prime Video', 'Disney+', 'HBO Max', 'Plex', 'Tubi', 'Spotify'];
 const S = (o = {}) => Object.assign({ v: 1, layout: 'list', theme: 'dusk', font: 'manrope', focus: 'glass', icons: 'on', clock: '12', apps: null }, o);
 
 // Most tests are about apps, so they start with Ambient hidden; the Ambient
@@ -326,7 +326,7 @@ test('apps on home: add, move and remove, saved across restarts', async () => {
   assert.equal(await focusedSheet(), 'YouTube');
   await press('Escape');
   await press('Escape');
-  const expected = ['Weather Now', 'Netflix', 'Prime Video', 'Disney+', 'Max', 'Plex', 'Tubi', 'Spotify'];
+  const expected = ['Weather Now', 'Netflix', 'Prime Video', 'Disney+', 'HBO Max', 'Plex', 'Tubi', 'Spotify'];
   assert.deepEqual(await homeNames(), expected);
   assert.equal(await focusedHome(), 'Settings', 'focus stays on Settings even though Home changed');
   await reload();
@@ -467,7 +467,7 @@ test('apps uninstalled while away disappear; installed ones show up', async () =
 
 test('a saved app follows its new id (HBO Max to Max)', async () => {
   await open('', { settings: S({ ambient: 'off', apps: ['cj37Ni3qXM.HBONow', 'org.tizen.netflix-app'] }) });
-  assert.deepEqual(await homeNames(), ['Max', 'Netflix']);
+  assert.deepEqual(await homeNames(), ['HBO Max', 'Netflix']);
   assert.deepEqual((await state()).settings.apps, ['5b8c3eb16b.BeamCTVDev', 'org.tizen.netflix-app']);
 });
 
