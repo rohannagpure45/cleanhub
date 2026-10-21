@@ -19,6 +19,11 @@ exactly as they are.
 ## What you get
 
 - **Two layouts.** A big-type list, or a dock of tiles with a large clock.
+- **Ambient, first on Home.** A near-black, low-power wallpaper with a small
+  dim clock and a loop of jazz, made to leave on all day (see
+  [docs/TV-SETUP.md](docs/TV-SETUP.md#ambient-leaving-it-on-all-day)).
+- **Fire TV on Home.** One press switches the TV to the Fire Stick's HDMI
+  input, full screen, in about 0.3 s.
 - **Settings is the button top right.** Press ▶ from the list, or ▲ from the
   dock; ◀, ▼ or Back returns to your app.
 - **Your apps, your order.** Settings → Apps on Home. OK adds an app; on an
@@ -30,7 +35,10 @@ exactly as they are.
 - **Fast on the TV.** Backgrounds and their frosted "glass" copies are
   pre-rendered images, and focus moves only animate `transform` and `opacity`.
   Nothing blurs or repaints the full screen as you move.
-- **Offline.** Fonts and images are bundled; the app makes no network requests.
+- **Offline.** Fonts, images and music are bundled; the app makes no network
+  requests.
+
+![Ambient](docs/screens/ambient-lamp.png)
 
 ### What it can't do
 
@@ -44,9 +52,10 @@ exactly as they are.
   replaces the screen you pick apps from.
 - **App icons:** if the TV won't hand an app's icon to a web app, Clean Hub
   shows a monogram tile in the service's colour instead.
-- **Untested on the panel itself so far.** The app list, ids and launch
-  behaviour follow other launchers that run on 2022 Samsung sets. If an app is
-  missing, Settings → Apps on Home → *Show everything the TV lists* rescues it.
+- **Tested on the QN85B itself** (Tizen 6.5): the app list, icons, launching,
+  Ambient's music and the HDMI switch were checked live over the TV's
+  debugger. If an app is ever missing, Settings → Apps on Home → *Show
+  everything the TV lists* rescues it.
 
 ## Put it on the TV
 
@@ -112,6 +121,16 @@ test/unit, test/ui  node:test suites
 Regenerate assets with `python3 scripts/gen-backgrounds.py` and
 `node scripts/vendor-fonts.mjs`; refresh the README screenshots with
 `node scripts/screenshots.mjs`.
+
+### The music
+
+The five tracks in `app/music` ("Clean Hub Trio": *Lamp Light*, *Blue Hour
+Walk*, *Quiet Harbor*, *Porch Blues*, *After Hours*, about 17 minutes) are
+original. `python3 scripts/gen-jazz.py` composes and renders them (Rhodes,
+vibraphone, upright bass, brushes) to AAC, so nothing needs licensing. The
+script is seeded, so it rebuilds the same tracks every time. To use other
+music, drop `.m4a` or `.mp3` files in `app/music` and list them in
+`app/music/playlist.js`.
 
 ## Licence
 

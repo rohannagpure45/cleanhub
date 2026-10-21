@@ -14,10 +14,10 @@ up or down in the same menu.
 2. **Open the Developer Mode box.** Press Home, go to **Apps**. On some
    firmware you then scroll to **App Settings**. Press the remote's **123**
    button until the on-screen number pad appears, and type **1 2 3 4 5**.
-3. **Developer mode: On.** In **Host PC IP**, enter this Mac's address,
-   **192.168.1.196** (its wired connection). Choose OK.
-   *The Mac is also on Wi-Fi as 192.168.1.141. Turn the Mac's Wi-Fi off while
-   installing, so it only uses the wired address.*
+3. **Developer mode: On.** In **Host PC IP**, enter the address this Mac uses
+   to reach the TV. This TV is set to **192.168.1.141** (the Mac's Wi-Fi).
+   `python3 scripts/tv.py doctor` prints the right address if it ever
+   changes, for example when a USB network adapter is plugged in.
 4. **Fully restart the TV.** Hold the remote's power button for 5–8 seconds,
    until the Samsung boot logo appears. Pressing Power normally only puts the
    TV into standby, which isn't enough. Or unplug the TV for 30 seconds.
@@ -67,6 +67,61 @@ python3 scripts/tv.py install                        # build, sign, install, ope
    in between updates, set Host PC IP to `127.0.0.1` and put the Mac's address
    back when you update. (Developer Mode has a known low-severity flaw that
    only that trusted computer can reach.)
+
+## Fire TV on Home
+
+Settings (top right) → **Fire TV on Home** → the HDMI input your Fire Stick
+uses (HDMI 4 on this TV). A *Fire TV* item appears on Home after Ambient. OK
+switches the TV to that input and hands the screen to Samsung's own TV viewer,
+so the Fire TV remote (or the Samsung remote, with Anynet+ on) drives the
+stick. To come back, press Home on the Samsung remote: Clean Hub is first in
+the app bar.
+
+The TV takes about 3 seconds to list its inputs, so Clean Hub asks when it
+starts and whenever it comes back to the front. Pressing OK then switches in
+about 0.3 s.
+
+## Ambient: leaving it on all day
+
+Ambient is first on Home. It shows a near-black wallpaper (Lamp, Midnight or
+Black) with a small dim clock that moves corners every 4 minutes, and plays
+the bundled jazz on a loop. Keys: the first press only shows the controls,
+then OK pauses or plays, ◀ ▶ change track, ▲ ▼ change wallpaper, and Back goes
+Home. If the TV is switched off while Ambient is showing, Clean Hub reopens
+it the next time it starts.
+
+The TV has timers that would end an all-day session. No app can override
+them, so set them once:
+
+| Setting (Settings → All Settings → …) | Set to | Why |
+| --- | --- | --- |
+| General & Privacy → Power and Energy Saving → **Auto Power Off** | **Off** | Otherwise the TV turns itself off after hours with no remote input (4 h is the usual default). |
+| General & Privacy → Power and Energy Saving → **Auto Power Saving** | Off | It can switch the screen off when the TV looks idle. |
+| General & Privacy → Power and Energy Saving → **Screen Saver** | Off | Ambient asks the TV to hold off its screensaver, but this 2022 toggle may not obey the app. |
+| General & Privacy → System Manager → Time → **Sleep Timer** / **Off Timer** | Off | Only matter if they were ever set. |
+| General & Privacy → Start Screen Options → **Autorun Last App** | On (optional) | After power-on, Clean Hub comes back, and with it Ambient. |
+
+**Using less power.** On this mini-LED TV the backlight is most of the power
+draw. Ambient is under 2% average brightness, so local dimming can turn most
+zones off.
+- Picture → Expert Settings → **Local Dimming: High**, and a lower
+  **Brightness**, help most. So does leaving Power and Energy Saving →
+  **Brightness Optimization** on.
+- For music with the screen fully off, use **Picture Off**: hold the remote's
+  Volume button for 2 seconds → Accessibility Shortcuts → Picture Off. It's
+  also at General & Privacy → Accessibility → Picture Off. Any key except
+  Volume or Power brings the picture back. In Ambient that first key only
+  shows the controls, so it won't stop the music.
+- Samsung rates the 85" QN85B at 106 W typical. Dark-screen and Picture Off
+  draw haven't been published for this model; a plug-in power meter will
+  tell you exactly.
+
+## Looking inside the app on the TV
+
+`python3 scripts/tv.py debug` relaunches Clean Hub in debug mode. Then
+`node scripts/tv-inspect.mjs eval '<js>'` runs JavaScript in the live app,
+and `node scripts/tv-inspect.mjs key Enter` sends a remote key. Taking
+screenshots isn't supported by the TV.
 
 ## Updating
 
