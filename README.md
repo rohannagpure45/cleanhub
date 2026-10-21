@@ -9,12 +9,13 @@ Samsung's Developer Mode. It does **not** root the TV, edit system files, or
 change what the Home button does. Samsung's own apps and Smart Hub stay
 exactly as they are.
 
-![List layout](docs/screens/list-dusk.png)
+![List layout: Ambient, Fire TV and the apps, each with its own icon](docs/screens/list-dusk.png)
 
 | | |
 | --- | --- |
-| ![Dock layout](docs/screens/dock-tide.png) | ![Settings](docs/screens/settings.png) |
-| ![Type focus, Fraunces, Ember](docs/screens/list-type-fraunces-ember.png) | ![Apps on Home](docs/screens/apps-on-home.png) |
+| ![Dock layout, Tide](docs/screens/dock-tide.png) | ![Settings](docs/screens/settings.png) |
+| ![Settings → Ambient music: a checklist of genres](docs/screens/music.png) | ![Settings → Apps on Home](docs/screens/apps-on-home.png) |
+| ![Type focus, Fraunces, Ember](docs/screens/list-type-fraunces-ember.png) | ![Text only, Space Grotesk, Night](docs/screens/list-text-night.png) |
 
 ## What you get
 
@@ -41,6 +42,10 @@ exactly as they are.
 - **Your apps, your order.** Settings → Apps on Home. OK adds an app; on an
   app that's already on Home, OK picks it up, ▲▼ move it, OK drops it, and ◀
   removes it.
+- **Real app icons.** Netflix, YouTube, Prime Video and the other apps Clean
+  Hub recognises show their own App Store or Google Play icon, bundled with
+  the app, rather than whatever the TV hands over (see
+  [below](#what-it-cant-do)).
 - **Five backgrounds** (Dusk, Tide, Ember, Night, Paper), **three fonts**
   (Manrope, Fraunces, Space Grotesk), **Glass or Type focus**, icons on or off,
   and a 12/24-hour clock or none.
@@ -60,6 +65,13 @@ move (`app/img/wall/`, placed and timed by `app/js/walls.js`). The TV only
 ever slides or fades those layers, the cheapest motion its compositor does,
 and a drifting layer is two copies of a seamless tile, so it never jumps.
 
+With Brainrot mode on, Ambient is the feed instead, with comments down the
+side. Every kind of reel, from the split-screen story to the DVD logo:
+
+![Brainrot mode](docs/screens/brainrot.png)
+
+![One reel of each kind](docs/screens/brainrot-reels.jpg)
+
 ### What it can't do
 
 - **The Home button still opens Samsung's Smart Hub.** Remapping it needs
@@ -77,9 +89,10 @@ and a drifting layer is two copies of a seamless tile, so it never jumps.
   `scripts/app-icons.json`). Other apps use the TV's icon, or a monogram tile
   when the TV won't hand one to a web app.
 - **Tested on the QN85B itself** (Tizen 6.5): the app list, icons, launching,
-  Ambient's music and the HDMI switch were checked live over the TV's
-  debugger. If an app is ever missing, Settings → Apps on Home → *Show
-  everything the TV lists* rescues it.
+  Ambient's music, the moving wallpapers (all at 60 fps), Brainrot mode and
+  the HDMI switch were checked live over the TV's debugger. If an app is ever
+  missing, Settings → Apps on Home → *Show everything the TV lists* rescues
+  it.
 
 ## Put it on the TV
 
@@ -131,21 +144,30 @@ engine, so the same build also runs on 2021 sets.
 app/                the .wgt contents that ship to the TV
   config.xml        Tizen widget manifest
   index.html
-  css/              app.css, fonts.css (generated)
+  css/              app.css, reel.css (Brainrot mode), fonts.css (generated)
   js/               catalog, options, store, apps, focus: pure logic
                     platform.js: the only file that calls `tizen`
                     ui.js: DOM; main.js: state and remote keys
+                    player.js: Ambient's music; walls.js: its moving wallpapers (generated)
                     brainrot.js: the feed's words; reel.js: its canvas scenes and sounds
-  img/              backgrounds (generated); apps/: app icons (fetched)
+  img/              backgrounds and wallpapers (generated); wall/: the wallpapers' moving layers;
+                    apps/: app icons (fetched)
+  music/            Ambient's tracks: the originals (playlist.js), a folder and a .js per genre,
+                    and brainrot/, the feed's soundtrack
   fonts/            Manrope, Fraunces, Space Grotesk (SIL OFL 1.1)
 scripts/            build.mjs, tv.py (sign/install), asset generation, compatibility check
+  music/            each genre's tracks, credits and sources, for prepare-music.py
 workbench/          desktop preview with a fake `tizen`
 test/unit, test/ui  node:test suites
+test/py             tv.py's tests (unittest)
 ```
 
 Regenerate assets with `python3 scripts/gen-backgrounds.py`,
-`python3 scripts/fetch-icons.py` and `node scripts/vendor-fonts.mjs`;
-refresh the README screenshots with `node scripts/screenshots.mjs`.
+`python3 scripts/gen-wallpapers.py`, `python3 scripts/fetch-icons.py` and
+`node scripts/vendor-fonts.mjs` (the music's scripts are below). Refresh the
+README screenshots with `node scripts/screenshots.mjs`: about three minutes,
+since it waits for Ambient's controls to fade and plays through the Brainrot
+feed to catch every kind of reel.
 
 ### The music
 
