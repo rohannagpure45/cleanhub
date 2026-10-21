@@ -570,8 +570,8 @@ test('Ambient keys: first press only wakes the controls, then OK, arrows and wal
   await press('ArrowDown');
   assert.equal(await page.getAttribute('html', 'data-wallpaper'), 'midnight');
   await press('ArrowDown');
-  assert.equal(await page.getAttribute('html', 'data-wallpaper'), 'black');
-  assert.equal((await state()).settings.wallpaper, 'black', 'saved');
+  assert.equal(await page.getAttribute('html', 'data-wallpaper'), 'streetlamp');
+  assert.equal((await state()).settings.wallpaper, 'streetlamp', 'saved');
 });
 
 test('Back leaves Ambient, stops the music and keeps focus on it', async () => {
@@ -706,7 +706,7 @@ test('▲ ▼ in Ambient cross-fade to the next wallpaper and name it', async ()
   assert.equal(await toastText(), 'Black');
   await page.waitForFunction(() => document.querySelector('#ambient').getAttribute('data-tone') === 'dark');
   assert.equal(await frontWall(), 'black');
-  await press('ArrowUp', 3); // Midnight, Lamp, then round to Rotate
+  await press('ArrowUp', 7); // the four night scenes, Midnight, Lamp, then round to Rotate
   assert.match(await toastText(), /^Rotate/);
   assert.equal((await state()).settings.wallpaper, 'rotate', 'saved');
   assert.deepEqual(errors, []);

@@ -774,6 +774,7 @@
     setBox(pic, l);
     pic.style.backgroundImage = 'url(' + l.src + ')';
     if (l.anim) pic.style.animation = l.anim;
+    if (l.origin) pic.style.transformOrigin = l.origin;
     if (!l.box) return pic;
     const box = h('div', 'wall-box');
     setBox(box, l.box);

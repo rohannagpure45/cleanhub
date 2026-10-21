@@ -90,7 +90,9 @@ Home. If the TV is switched off while Ambient is showing, Clean Hub reopens
 it the next time it starts.
 
 Wallpapers (▲ ▼ in Ambient, or Settings → Ambient wallpaper):
-- **Lamp**, **Midnight** and **Black** are near-black, for low power.
+- **Lamp**, **Midnight** and **Black** are near-black, for low power, and so
+  are four night scenes lit by one light: **Street Lamp**, **Moonrise**,
+  **Lighthouse** and **Fireflies**.
 - **Sunset**, **Coast**, **Dunes**, **Aurora** and **City Rain** are
   full-colour scenes, with a light clock.
 - **Rotate** shows the scenes in turn, a new one every quarter hour.

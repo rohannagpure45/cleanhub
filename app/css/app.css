@@ -992,6 +992,11 @@ html[data-layout="dock"] .toast {
   to { transform: translate3d(0, 0, 0); }
 }
 
+@keyframes wall-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.12; }
+}
+
 @keyframes wall-glimmer {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
@@ -1035,6 +1040,34 @@ html[data-layout="dock"] .toast {
   100% { transform: translate3d(0, 1260px, 0); }
 }
 
+/* Street Lamp: snow sinking through the lamplight, one tile per cycle. */
+@keyframes wall-sink-720 {
+  from { transform: translate3d(0, -720px, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+/* Lighthouse: each half of the beam stretches out from the lantern and back
+   as it turns across our view; the flash comes between, as it faces us. */
+@keyframes wall-beam {
+  0% { opacity: 0; transform: scale3d(0.04, 1, 1); }
+  25% { opacity: 1; transform: scale3d(1, 1, 1); }
+  50%, 100% { opacity: 0; transform: scale3d(0.04, 1, 1); }
+}
+
+@keyframes wall-flash {
+  0%, 42% { opacity: 0; }
+  50% { opacity: 1; }
+  58%, 100% { opacity: 0; }
+}
+
+/* Fireflies: a quick glow, a slow fade, then dark for most of the beat. */
+@keyframes wall-blink {
+  0%, 100% { opacity: 0; }
+  8% { opacity: 1; }
+  20% { opacity: 0.8; }
+  36% { opacity: 0; }
+}
+
 /* Midnight: now and then, a shooting star. */
 .wall-shoot-path {
   width: 760px;
@@ -1059,6 +1092,10 @@ html[data-layout="dock"] .toast {
 
 .ambient-wall.wall-lamp { background-image: url(../img/ambient-lamp.jpg); }
 .ambient-wall.wall-midnight { background-image: url(../img/ambient-midnight.jpg); }
+.ambient-wall.wall-streetlamp { background-image: url(../img/ambient-streetlamp.jpg); }
+.ambient-wall.wall-moonrise { background-image: url(../img/ambient-moonrise.jpg); }
+.ambient-wall.wall-lighthouse { background-image: url(../img/ambient-lighthouse.jpg); }
+.ambient-wall.wall-fireflies { background-image: url(../img/ambient-fireflies.jpg); }
 .ambient-wall.wall-sunset { background-image: url(../img/ambient-sunset.jpg); }
 .ambient-wall.wall-coast { background-image: url(../img/ambient-coast.jpg); }
 .ambient-wall.wall-dunes { background-image: url(../img/ambient-dunes.jpg); }
