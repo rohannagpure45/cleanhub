@@ -958,7 +958,7 @@ html[data-layout="dock"] .toast {
 .wall-box,
 .wall-drops,
 .wall-shoot-path,
-.wall-sheen {
+.wall-tilt {
   position: absolute;
 }
 
@@ -981,6 +981,17 @@ html[data-layout="dock"] .toast {
   to { transform: translate3d(0, 0, 0); }
 }
 
+@keyframes wall-drift-1200 {
+  from { transform: translate3d(-1200px, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+/* Coast's swell: a tile seamless top to bottom, rolling down towards the shore. */
+@keyframes wall-roll-240 {
+  from { transform: translate3d(0, -240px, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
 @keyframes wall-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.12; }
@@ -994,38 +1005,6 @@ html[data-layout="dock"] .toast {
 @keyframes wall-breathe {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.72; }
-}
-
-/* Deco's sunburst: one pair of 6 degree wedges per cycle, so it loops seamlessly. */
-@keyframes wall-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(12deg); }
-}
-
-/* Deco's sheen: a soft band crosses the gold, then waits. Its picture runs
-   the other way exactly as fast, so the gold itself stays put. */
-.wall-sheen {
-  left: 0;
-  top: 0;
-  width: 420px;
-  height: 1080px;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 0), #000 40%, #000 60%, rgba(0, 0, 0, 0));
-  animation: wall-sheen 15s linear infinite;
-}
-
-.wall-sheen-pic {
-  animation: wall-sheen-pic 15s linear infinite;
-}
-
-@keyframes wall-sheen {
-  0% { transform: translate3d(-420px, 0, 0); }
-  35%, 100% { transform: translate3d(1920px, 0, 0); }
-}
-
-@keyframes wall-sheen-pic {
-  0% { transform: translate3d(420px, 0, 0); }
-  35%, 100% { transform: translate3d(-1920px, 0, 0); }
 }
 
 /* City Rain: drops running down the glass. */
@@ -1047,9 +1026,46 @@ html[data-layout="dock"] .toast {
   transform: translate3d(0, -160px, 0);
 }
 
+/* A drop clings, slips, clings again, then runs off the bottom. Each drop
+   starts a little higher or lower (its top), so they don't all cling at
+   the same heights. */
 @keyframes wall-fall {
-  from { transform: translate3d(0, -160px, 0); }
-  to { transform: translate3d(0, 1120px, 0); }
+  0% { transform: translate3d(0, -160px, 0); animation-timing-function: cubic-bezier(0.4, 0, 0.3, 1); }
+  14% { transform: translate3d(0, 150px, 0); animation-timing-function: linear; }
+  32% { transform: translate3d(0, 172px, 0); animation-timing-function: cubic-bezier(0.5, 0, 0.3, 1); }
+  39% { transform: translate3d(0, 430px, 0); animation-timing-function: linear; }
+  60% { transform: translate3d(0, 452px, 0); animation-timing-function: cubic-bezier(0.5, 0, 0.3, 1); }
+  67% { transform: translate3d(0, 740px, 0); animation-timing-function: linear; }
+  80% { transform: translate3d(0, 758px, 0); animation-timing-function: cubic-bezier(0.55, 0, 1, 1); }
+  100% { transform: translate3d(0, 1260px, 0); }
+}
+
+/* Street Lamp: snow sinking through the lamplight, one tile per cycle. */
+@keyframes wall-sink-720 {
+  from { transform: translate3d(0, -720px, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+/* Lighthouse: each half of the beam stretches out from the lantern and back
+   as it turns across our view; the flash comes between, as it faces us. */
+@keyframes wall-beam {
+  0% { opacity: 0; transform: scale3d(0.04, 1, 1); }
+  25% { opacity: 1; transform: scale3d(1, 1, 1); }
+  50%, 100% { opacity: 0; transform: scale3d(0.04, 1, 1); }
+}
+
+@keyframes wall-flash {
+  0%, 42% { opacity: 0; }
+  50% { opacity: 1; }
+  58%, 100% { opacity: 0; }
+}
+
+/* Fireflies: a quick glow, a slow fade, then dark for most of the beat. */
+@keyframes wall-blink {
+  0%, 100% { opacity: 0; }
+  8% { opacity: 1; }
+  20% { opacity: 0.8; }
+  36% { opacity: 0; }
 }
 
 /* Midnight: now and then, a shooting star. */
@@ -1076,12 +1092,15 @@ html[data-layout="dock"] .toast {
 
 .ambient-wall.wall-lamp { background-image: url(../img/ambient-lamp.jpg); }
 .ambient-wall.wall-midnight { background-image: url(../img/ambient-midnight.jpg); }
+.ambient-wall.wall-streetlamp { background-image: url(../img/ambient-streetlamp.jpg); }
+.ambient-wall.wall-moonrise { background-image: url(../img/ambient-moonrise.jpg); }
+.ambient-wall.wall-lighthouse { background-image: url(../img/ambient-lighthouse.jpg); }
+.ambient-wall.wall-fireflies { background-image: url(../img/ambient-fireflies.jpg); }
 .ambient-wall.wall-sunset { background-image: url(../img/ambient-sunset.jpg); }
 .ambient-wall.wall-coast { background-image: url(../img/ambient-coast.jpg); }
 .ambient-wall.wall-dunes { background-image: url(../img/ambient-dunes.jpg); }
 .ambient-wall.wall-aurora { background-image: url(../img/ambient-aurora.jpg); }
 .ambient-wall.wall-rain { background-image: url(../img/ambient-rain.jpg); }
-.ambient-wall.wall-deco { background-image: url(../img/ambient-deco.jpg); }
 
 /* z-index 1 makes the text its own stacking context, so the scrim behind it
    (z-index -1) stays above the wallpaper. */
