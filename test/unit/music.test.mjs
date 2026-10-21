@@ -1,13 +1,14 @@
-// Ambient's music: every genre Settings offers is bundled, loaded and kept.
+// Ambient's music: every genre Settings offers is bundled, loaded and kept,
+// and Shuffle plays the ticked ones in a new random order each time round.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
-import { load, memoryStorage } from './load.mjs';
+import { load, memoryStorage, SCRIPTS } from './load.mjs';
 
 const APP = fileURLToPath(new URL('../../app/', import.meta.url));
-const CH = load();
+const CH = load([...SCRIPTS, 'player.js']);
 const html = readFileSync(APP + 'index.html', 'utf8');
 const genres = Array.from(CH.genres, (g) => g.id); // an array of this realm, not the sandbox's
 const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -90,5 +91,45 @@ test('no audio ships that no genre plays', () => {
     for (const f of readdirSync(APP + 'music/' + id).filter((f) => f.endsWith('.m4a'))) {
       assert.ok(files.has(`${id}/${f}`), `app/music/${id}/${f} isn't in the playlist`);
     }
+  }
+});
+
+// ---- Shuffle --------------------------------------------------------------------
+
+// A repeatable stand-in for Math.random (mulberry32).
+function seeded(seed) {
+  return () => {
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const tracks = Array.from({ length: 22 }, (_, i) => ({ file: `t${i}.m4a` }));
+const files = (list) => Array.from(list, (t) => t.file);
+
+test('Shuffle is on until it is turned off', () => {
+  assert.equal(CH.store.defaults().shuffle, 'on');
+  assert.equal(CH.store.sanitize({ shuffle: 'off' }).shuffle, 'off');
+  assert.equal(CH.store.sanitize({ shuffle: 'sideways' }).shuffle, 'on');
+});
+
+test('a shuffle plays every ticked track once, in a different order each time', () => {
+  const a = files(CH.player.shuffled(tracks, null, null, seeded(1)));
+  const b = files(CH.player.shuffled(tracks, null, null, seeded(2)));
+  assert.deepEqual([...a].sort(), files(tracks).sort());
+  assert.notDeepEqual(a, files(tracks), 'not the list order');
+  assert.notDeepEqual(a, b, 'a new order each time');
+});
+
+test('a resumed track leads the shuffle, and a new round never repeats the last track', () => {
+  for (let s = 0; s < 50; s++) {
+    assert.equal(CH.player.shuffled(tracks, tracks[9], null, seeded(s))[0].file, 't9.m4a');
+  }
+  for (let s = 0; s < 200; s++) {
+    const last = tracks[s % tracks.length];
+    const next = files(CH.player.shuffled(tracks, null, last, seeded(s)));
+    assert.notEqual(next[0], last.file);
+    assert.equal(new Set(next).size, tracks.length);
   }
 });

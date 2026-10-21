@@ -73,6 +73,12 @@
     brainrotMusic: [
       { id: 'on', name: 'On' },
       { id: 'off', name: 'Off' }
+    ],
+    // Ambient music's order: a new random one each time round, or the
+    // genres' own. Ticked in the Ambient music sheet, so no row of its own.
+    shuffle: [
+      { id: 'on', name: 'On' },
+      { id: 'off', name: 'Off' }
     ]
   };
 
@@ -83,7 +89,7 @@
   CH.genres = [
     { id: 'originals', name: 'Originals', note: 'Clean Hub Trio jazz' },
     { id: 'vintage', name: '1920s', note: 'Dance bands and blues, 1919–25' },
-    { id: 'classical', name: 'Classical', note: 'Grieg, Vivaldi, Haydn, Dvořák' },
+    { id: 'classical', name: 'Classical', note: 'Bach, Vivaldi, Mozart, Grieg, Dvořák' },
     { id: 'piano', name: 'Piano', note: 'Satie, Chopin, Bach, Beethoven' },
     { id: 'ragtime', name: 'Ragtime', note: 'Joplin and friends' },
     { id: 'bigband', name: 'Big band', note: 'Airmen of Note, 1920s orchestras' },

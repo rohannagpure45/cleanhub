@@ -464,28 +464,39 @@
     focusSheet(focusIndex, true);
   }
 
-  function musicHint(genres, chosen, focusIndex) {
-    const on = chosen.indexOf(genres[focusIndex].id) !== -1;
+  // The focused row is a genre, or past the genres, Shuffle.
+  function musicHint(genres, chosen, focusIndex, shuffle) {
+    const on = focusIndex < genres.length ? chosen.indexOf(genres[focusIndex].id) !== -1 : shuffle;
     return [['OK', on ? 'Turn off' : 'Turn on'], ['Back', 'Settings']];
   }
 
   // Focus moved in the music sheet: only the hint line depends on it.
-  function updateMusicHint(genres, chosen, focusIndex) {
-    if (sheet.hint) fillHint(sheet.hint, musicHint(genres, chosen, focusIndex));
+  function updateMusicHint(genres, chosen, focusIndex, shuffle) {
+    if (sheet.hint) fillHint(sheet.hint, musicHint(genres, chosen, focusIndex, shuffle));
   }
 
-  // The Ambient music checklist. genres: CH.genres; chosen: the ticked ids.
-  function renderMusicSheet(genres, chosen, focusIndex) {
-    sheetFrame('Ambient music', chosen.length ? 'Playing ' + chosen.length + ' of ' + genres.length : 'Music off',
-      musicHint(genres, chosen, focusIndex));
+  function checkRow(attr, value, label, note, on) {
+    const row = h('div', 'sheet-row' + (on ? ' is-on' : ''));
+    row.setAttribute(attr, value);
+    row.appendChild(svg('check check-box', ICONS.check));
+    row.appendChild(h('span', 'sheet-label', label));
+    row.appendChild(h('span', 'sheet-note', note));
+    return row;
+  }
+
+  // The Ambient music checklist: a row per genre (genres: CH.genres; chosen:
+  // the ticked ids), then Shuffle.
+  function renderMusicSheet(genres, chosen, focusIndex, shuffle) {
+    const sub = chosen.length
+      ? 'Playing ' + chosen.length + ' of ' + genres.length + (shuffle ? ', shuffled' : ', in order')
+      : 'Music off';
+    sheetFrame('Ambient music', sub, musicHint(genres, chosen, focusIndex, shuffle));
     genres.forEach(function (g, i) {
-      const row = h('div', 'sheet-row' + (chosen.indexOf(g.id) !== -1 ? ' is-on' : ''));
-      row.setAttribute('data-genre', g.id);
-      row.appendChild(svg('check check-box', ICONS.check));
-      row.appendChild(h('span', 'sheet-label', g.name));
-      row.appendChild(h('span', 'sheet-note', g.note));
-      addRow(row, i === focusIndex);
+      addRow(checkRow('data-genre', g.id, g.name, g.note, chosen.indexOf(g.id) !== -1), i === focusIndex);
     });
+    sheet.track.appendChild(h('div', 'sheet-section', 'Order'));
+    addRow(checkRow('data-shuffle', '', 'Shuffle', shuffle ? 'A new order each time round' : 'Genres in list order', shuffle),
+      focusIndex === genres.length);
     alignGlass(sheet.el);
     focusSheet(focusIndex, true);
   }

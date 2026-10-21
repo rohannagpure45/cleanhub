@@ -23,6 +23,7 @@
     wallpaper: 'lamp',
     motion: 'on', // the wallpaper's layers move
     music: genreIds(), // Ambient's genres, ticked in Settings; [] = no music
+    shuffle: 'on', // play them in a random order
     input: 'off', // which HDMI input the Home 'Fire TV' item switches to
     brainrot: 'off', // Ambient shows the brainrot feed instead of the wallpaper
     brainrotMusic: 'on', // its soundtrack; the reels' own sounds play either way

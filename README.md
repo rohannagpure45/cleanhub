@@ -184,14 +184,16 @@ music, drop `.m4a` or `.mp3` files in `app/music` and list them in
 
 Ambient also carries six **genres** of recordings that are free to use.
 Settings → Ambient music is a checklist of every genre, the originals
-included: OK ticks or unticks one, Ambient plays the ticked genres one after
-another, and with none ticked it's silent. The choice is saved, so it holds
-after a restart too.
+included: OK ticks or unticks one, and with none ticked Ambient is silent.
+**Shuffle**, the list's last row and on to start, plays the ticked genres'
+tracks in a random order, a new one each time round (never the same track
+twice in a row); off, they play one genre after another. The choices are
+saved, and after a restart Ambient picks up the track it was playing.
 
 | Genre | Tracks | What it is | Why it's free |
 | --- | --- | --- | --- |
 | 1920s | 10, 30 min | Dance bands and blues, 1919–1925 (Whiteman, Bessie Smith, Bix) | U.S. recordings published before 1926 |
-| Classical | 6, 24 min | Slow movements: Grieg, Vivaldi's Four Seasons, Haydn, Dvořák | Musopen's public-domain recordings |
+| Classical | 19, 93 min | Slow movements and serenades: Bach's Air, Pachelbel's Canon, Vivaldi, Handel, Haydn, Mozart, Beethoven, Grieg, Brahms, Dvořák, Debussy | Musopen's public-domain recordings; the U.S. Marine Band and Air Force Band (government works) |
 | Piano | 6, 24 min | Satie, Chopin, Bach's Goldberg Aria, Schumann, Beethoven | Musopen's public-domain recordings; Open Goldberg (CC0) |
 | Ragtime | 8, 29 min | Joplin and friends: piano, a roll, banjo, 78s, the U.S. Marine Band | Pre-1926 recordings, CC0 performances, a U.S. government work |
 | Big band | 7, 26 min | The Air Force's Airmen of Note; Henderson, Goldkette, Whiteman 78s | U.S. government works; pre-1926 recordings |

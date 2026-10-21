@@ -32,7 +32,9 @@ beforeEach(async () => {
 });
 
 const DEFAULT_HOME = ['Netflix', 'YouTube', 'Prime Video', 'Disney+', 'HBO Max', 'Plex', 'Tubi', 'Spotify'];
-const S = (o = {}) => Object.assign({ v: 1, layout: 'list', theme: 'dusk', font: 'manrope', focus: 'glass', icons: 'on', clock: '12', music: 'all', apps: null }, o);
+// Music plays in list order here (Shuffle off), so tests can name the next
+// track; the Shuffle tests turn it back on.
+const S = (o = {}) => Object.assign({ v: 1, layout: 'list', theme: 'dusk', font: 'manrope', focus: 'glass', icons: 'on', clock: '12', music: 'all', shuffle: 'off', apps: null }, o);
 
 // Most tests are about apps, so they start with Ambient hidden; the Ambient
 // tests pass settings that show it.
@@ -1118,7 +1120,7 @@ test('Press OK to play: one OK starts the music when autoplay was refused', asyn
 // The player's list: how many tracks, and which genre the current one is from.
 const playing = () => page.evaluate(() => {
   const st = window.CleanHub.player.state();
-  return { count: st.count, index: st.index, set: st.track && st.track.set, wanted: st.wanted };
+  return { count: st.count, index: st.index, set: st.track && st.track.set, file: st.track && st.track.file, wanted: st.wanted };
 });
 const GENRES = ['Originals', '1920s', 'Classical', 'Piano', 'Ragtime', 'Big band', 'Ambient'];
 const GENRE_IDS = ['originals', 'vintage', 'classical', 'piano', 'ragtime', 'bigband', 'ambient'];
@@ -1171,8 +1173,8 @@ test('Ambient music is a checklist of genres, every one ticked to start', async 
   assert.deepEqual(errors, []);
 });
 
-test('a mix of genres is saved, and after a restart Ambient plays only those', async () => {
-  await open('', { settings: S({ music: 'originals' }) }); // an older single-genre save
+test('a mix of genres is saved, and after a restart Ambient plays only those, shuffled', async () => {
+  await open('', { settings: S({ music: 'originals', shuffle: undefined }) }); // an older save: Shuffle on
   await openMusicSheet();
   assert.deepEqual(await ticked(), ['Originals']);
   await toggleGenres(['Classical', 'Piano', 'Ambient']);
@@ -1189,16 +1191,54 @@ test('a mix of genres is saved, and after a restart Ambient plays only those', a
   await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
   const counts = await trackCounts();
   const expected = mix.reduce((n, id) => n + counts[id], 0);
-  const p = await playing();
-  assert.equal(p.count, expected);
-  assert.equal(p.set, 'originals', 'ticked genres play in list order');
-  const heard = new Set([p.set]);
-  for (let i = 1; i < expected; i++) {
-    await press('ArrowRight');
-    heard.add((await playing()).set);
+  assert.equal((await playing()).count, expected);
+  // Two times round: each round plays every ticked track once, in a new order.
+  const rounds = [[], []];
+  for (const round of rounds) {
+    for (let i = 0; i < expected; i++) {
+      if (round !== rounds[0] || i) await press('ArrowRight');
+      round.push(await playing());
+    }
   }
-  assert.deepEqual([...heard].sort(), [...mix].sort(), 'every track is from a ticked genre');
+  const listOrder = await page.evaluate((m) => window.CleanHub.playlist.filter((t) => m.includes(t.set)).map((t) => t.file), mix);
+  for (const round of rounds) {
+    assert.equal(new Set(round.map((t) => t.file)).size, expected, 'every track once');
+    assert.deepEqual([...new Set(round.map((t) => t.set))].sort(), [...mix].sort(), 'only ticked genres');
+  }
+  assert.notDeepEqual(rounds[0].map((t) => t.file), listOrder, 'not the list order');
+  assert.notDeepEqual(rounds[1].map((t) => t.file), rounds[0].map((t) => t.file), 'a new order the second time round');
+  assert.notEqual(rounds[1][0].file, rounds[0][expected - 1].file, 'no track twice in a row');
   assert.deepEqual(errors, []);
+});
+
+test('Shuffle is the last row of the music checklist, and can be turned off', async () => {
+  await open('', { settings: S({ music: ['originals', 'piano'], shuffle: undefined }) });
+  await openMusicSheet();
+  assert.equal(await page.$eval('#sheet [data-shuffle]', (e) => e.classList.contains('is-on')), true, 'on to start');
+  assert.match(await page.$eval('#sheet .sheet-sub', (e) => e.textContent), /Playing 2 of 7, shuffled/);
+  await press('ArrowDown', GENRES.length); // past the genres
+  assert.equal(await focusedSheet(), 'Shuffle');
+  assert.match(await sheetHint(), /OK\s*Turn off/);
+  await press('Enter');
+  assert.equal((await state()).settings.shuffle, 'off');
+  assert.match(await page.$eval('#sheet .sheet-sub', (e) => e.textContent), /in order/);
+  await reload();
+  assert.equal((await state()).settings.shuffle, 'off', 'saved');
+  const first = await playing();
+  assert.equal(first.index, 0);
+  assert.equal(first.file, '01-lamp-light.m4a', 'the originals first, in their order');
+});
+
+test('shuffled, a restart picks up the track that was playing', async () => {
+  await openAmbient('', S({ music: ['classical', 'piano'], shuffle: 'on' }));
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  await press('ArrowRight', 3);
+  const before = await playing();
+  await reload(); // Ambient was showing, so it comes back
+  assert.equal((await state()).screen, 'ambient');
+  const after = await playing();
+  assert.equal(after.file, before.file);
+  assert.equal(after.count, before.count);
 });
 
 test('after the genres change, a restart starts the new list from its first track', async () => {
