@@ -31,6 +31,9 @@ export function problems() {
   for (const f of ['index.html', 'icon.png', 'css/fonts.css', 'img/bg-dusk.jpg']) {
     if (!existsSync(ROOT + 'app/' + f)) out.push(`app/${f} is missing (run the asset scripts)`);
   }
+  const icons = Object.keys(JSON.parse(readFileSync(ROOT + 'scripts/app-icons.json', 'utf8'))).filter((k) => k[0] !== '_');
+  const noIcon = icons.filter((k) => !existsSync(ROOT + 'app/img/apps/' + k + '.png'));
+  if (noIcon.length) out.push(`app icons missing for ${noIcon.join(', ')} (run python3 scripts/fetch-icons.py)`);
   return out;
 }
 

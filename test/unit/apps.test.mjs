@@ -74,6 +74,19 @@ test('normalize keeps a usable icon path and ignores empty ones', () => {
   assert.equal(list.find((e) => e.key === 'youtube').icon, null);
 });
 
+test('recognised apps get our copy of their icon; unknown apps and art: false do not', () => {
+  const list = CH.apps.normalize([
+    ...TV_APPS,
+    { id: 'OK2Rdkjmsi.IMDbTV', name: 'Freevee', show: true, iconPath: '/opt/usr/apps/OK2Rdkjmsi/shared/res/fv.png' }
+  ], CH.catalog);
+  const art = Object.fromEntries(list.map((e) => [e.key || e.id, e.art]));
+  assert.equal(art.youtube, 'img/apps/youtube.png');
+  assert.equal(art.prime, 'img/apps/prime.png');
+  assert.equal(art['abc123defg.WeatherNow'], null);
+  assert.equal(art.freevee, null);
+  assert.equal(list.find((e) => e.key === 'freevee').icon, '/opt/usr/apps/OK2Rdkjmsi/shared/res/fv.png');
+});
+
 test('normalize sorts by name and tolerates junk input', () => {
   const names = plain(CH.apps.normalize(TV_APPS, CH.catalog).map((e) => e.name));
   assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b)));

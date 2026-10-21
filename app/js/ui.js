@@ -122,8 +122,9 @@
 
   // ---- Tiles ---------------------------------------------------------------
 
-  // Monogram first; the TV's own icon goes on top only once it has loaded,
-  // so a transparent logo never shows the letters through it.
+  // Monogram first; an icon goes on top only once it has loaded, so a
+  // transparent logo never shows the letters through it. Our copy of a
+  // recognised app's icon is tried first, then the TV's own.
   function tile(entry) {
     const el = h('span', 'tile');
     el.style.backgroundColor = entry.bg;
@@ -134,17 +135,19 @@
       return el;
     }
     el.appendChild(h('span', 'tile-mono', entry.mono));
-    const url = CH.platform.iconUrl(entry.icon);
-    if (url) {
+    const urls = [entry.art, CH.platform.iconUrl(entry.icon)].filter(Boolean);
+    if (urls.length) {
       const img = doc.createElement('img');
       img.alt = '';
       img.onload = function () {
         if (img.naturalWidth) el.classList.add('has-icon');
       };
       img.onerror = function () {
-        if (img.parentNode) img.parentNode.removeChild(img);
+        urls.shift();
+        if (urls.length) img.src = urls[0];
+        else if (img.parentNode) img.parentNode.removeChild(img);
       };
-      img.src = url;
+      img.src = urls[0];
       el.appendChild(img);
     }
     return el;

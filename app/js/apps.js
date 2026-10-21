@@ -90,13 +90,14 @@
       name: app && app.name ? app.name : name, // a catalog entry without a name keeps the TV's
       key: app ? app.key : null,
       icon: typeof info.iconPath === 'string' && info.iconPath ? info.iconPath : null,
+      art: app && app.art !== false ? 'img/apps/' + app.key + '.png' : null, // our copy, tried before `icon`
       mono: app ? app.mono : monogram(name),
       bg: app ? app.bg : fillFor(info.id),
       fg: app ? app.fg : '#F4F1EA'
     };
   }
 
-  // Returns [{ id, name, key, icon, mono, bg, fg }] sorted by name.
+  // Returns [{ id, name, key, icon, art, mono, bg, fg }] sorted by name.
   // Recognised apps are kept even if the TV marks them hidden; when a TV lists
   // one app twice, the better-ranked id wins. Unrecognised entries must look
   // like store apps. With `everything`, only invalid entries are dropped (for

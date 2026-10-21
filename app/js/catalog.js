@@ -1,8 +1,11 @@
 // Streaming apps we recognise on Samsung TVs. `ids` are Tizen app ids seen on
 // 2020-2024 sets, most preferred first (when a TV lists two, e.g. YouTube and
 // its Cobalt twin, the earlier id wins). `match` catches the same app by its
-// display name when the id differs by year or region. Colours are only used
-// for the monogram tile when the TV gives no icon.
+// display name when the id differs by year or region. Each app shows our own
+// copy of its icon, img/apps/<key>.png (scripts/fetch-icons.py), because the
+// TV's can be a placeholder (YouTube) or unreadable (Prime Video); `art: false`
+// means there is none, so the TV's icon is used. Colours are only used for
+// the monogram tile when neither loads.
 (function (root) {
   'use strict';
   const CH = root.CleanHub = root.CleanHub || {};
@@ -41,11 +44,13 @@
     { key: 'pbs', ids: ['70fRFUwYlD.OtterGAProd'], name: 'PBS Video', match: /^pbs video\b/i, mono: 'PBS', bg: '#2638C4', fg: '#FFFFFF' },
     { key: 'pbskids', ids: ['Rk72oKFsRS.OtterKidsProd'], name: 'PBS KIDS Video', match: /^pbs kids\b/i, mono: 'KIDS', bg: '#0B8A3E', fg: '#FFFFFF' },
     { key: 'amcplus', ids: ['Ob3XhAVMu6.amcplus'], name: 'AMC+', match: /^amc\s*\+|^amc plus\b/i, mono: 'AMC', bg: '#111111', fg: '#FFFFFF' },
-    { key: 'freevee', ids: ['OK2Rdkjmsi.IMDbTV'], name: 'Freevee', match: /^freevee\b/i, mono: 'fv', bg: '#1F1F1F', fg: '#43D9AD' },
+    // Freevee closed in 2025 (folded into Prime Video), so no store has its icon.
+    { key: 'freevee', ids: ['OK2Rdkjmsi.IMDbTV'], name: 'Freevee', match: /^freevee\b/i, mono: 'fv', bg: '#1F1F1F', fg: '#43D9AD', art: false },
     { key: 'viaplay', ids: ['niYSnzL6h1.Viaplay'], name: 'Viaplay', match: /^viaplay\b/i, mono: 'V', bg: '#2C0E37', fg: '#FF3C8C' },
     { key: 'instagram', ids: ['zigzSWa1hy.InstagramAirwave'], name: 'Instagram', match: /^instagram\b/i, mono: 'IG', bg: '#C13584', fg: '#FFFFFF' },
     { key: 'health', ids: ['com.samsung.tv.samsung-health'], name: 'Samsung Health', match: /^samsung health\b/i, mono: 'SH', bg: '#0E7C86', fg: '#FFFFFF' },
-    { key: 'meet', ids: ['IewQEY143t.GoogleDuoWeb'], name: 'Google Meet', match: /^google meet\b/i, mono: 'GM', bg: '#174EA6', fg: '#FFFFFF' }
+    { key: 'meet', ids: ['IewQEY143t.GoogleDuoWeb'], name: 'Google Meet', match: /^google meet\b/i, mono: 'GM', bg: '#174EA6', fg: '#FFFFFF' },
+    { key: 'alexa', ids: ['AQKO41xyKP.AmazonAlexa'], name: 'Amazon Alexa', match: /^(amazon )?alexa\b/i, mono: 'A', bg: '#00CAFF', fg: '#0B0C0F' }
   ];
 
   // Order the home screen uses the first time, before the viewer picks apps.

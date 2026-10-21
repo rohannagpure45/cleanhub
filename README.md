@@ -50,8 +50,12 @@ exactly as they are.
   the last app open when the TV went off.
 - **Ads inside apps** (YouTube, Prime Video, etc.) are untouched; it only
   replaces the screen you pick apps from.
-- **App icons:** if the TV won't hand an app's icon to a web app, Clean Hub
-  shows a monogram tile in the service's colour instead.
+- **App icons:** the TV's own icons can't be trusted (on the QN85B, YouTube's
+  is Tizen's placeholder pinwheel and Prime Video's won't load), so the apps
+  Clean Hub recognises carry their own icon, from the app's App Store or
+  Google Play listing (`python3 scripts/fetch-icons.py`, sources in
+  `scripts/app-icons.json`). Other apps use the TV's icon, or a monogram tile
+  when the TV won't hand one to a web app.
 - **Tested on the QN85B itself** (Tizen 6.5): the app list, icons, launching,
   Ambient's music and the HDMI switch were checked live over the TV's
   debugger. If an app is ever missing, Settings → Apps on Home → *Show
@@ -111,16 +115,16 @@ app/                the .wgt contents that ship to the TV
   js/               catalog, options, store, apps, focus: pure logic
                     platform.js: the only file that calls `tizen`
                     ui.js: DOM; main.js: state and remote keys
-  img/              backgrounds (generated)
+  img/              backgrounds (generated); apps/: app icons (fetched)
   fonts/            Manrope, Fraunces, Space Grotesk (SIL OFL 1.1)
 scripts/            build.mjs, tv.py (sign/install), asset generation, compatibility check
 workbench/          desktop preview with a fake `tizen`
 test/unit, test/ui  node:test suites
 ```
 
-Regenerate assets with `python3 scripts/gen-backgrounds.py` and
-`node scripts/vendor-fonts.mjs`; refresh the README screenshots with
-`node scripts/screenshots.mjs`.
+Regenerate assets with `python3 scripts/gen-backgrounds.py`,
+`python3 scripts/fetch-icons.py` and `node scripts/vendor-fonts.mjs`;
+refresh the README screenshots with `node scripts/screenshots.mjs`.
 
 ### The music
 
@@ -156,5 +160,5 @@ hiss, levels them, and encodes them to mono AAC in `app/music/vintage/`.
 ## Licence
 
 MIT for the code. Fonts are SIL Open Font License 1.1 (see `app/fonts/`).
-Service names and colours identify the apps installed on your TV; they belong
-to their owners.
+Service names, colours and app icons identify the apps installed on your TV;
+they belong to their owners.
