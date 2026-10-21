@@ -57,6 +57,8 @@
 
   window.__mock = {
     launches: launches,
+    sources: [],
+    hidden: 0,
     apps: APPS[scenario] || APPS.typical,
     listFails: params.get('listFail') === '1',
     // Simulates another app taking the screen, and the viewer coming back.
@@ -104,7 +106,31 @@
         }, 20);
       },
       getCurrentApplication: function () {
-        return { exit: function () {}, hide: function () {} };
+        return {
+          exit: function () {},
+          hide: function () { window.__mock.hidden++; }
+        };
+      }
+    },
+    // Inputs as the QN85B reported them: devices on HDMI 2 and HDMI 4.
+    systeminfo: {
+      getPropertyValue: function (prop, ok, fail) {
+        setTimeout(function () {
+          if (prop !== 'VIDEOSOURCE') { fail({ name: 'NotSupportedError', message: prop }); return; }
+          ok({
+            connected: [{ type: 'TV', number: 1 }, { type: 'HDMI', number: 2 }, { type: 'HDMI', number: 4 }],
+            disconnected: [{ type: 'HDMI', number: 1 }, { type: 'HDMI', number: 3 }]
+          });
+        }, 10);
+      }
+    },
+    tvwindow: {
+      setSource: function (source, ok, fail) {
+        setTimeout(function () {
+          if (params.get('sourceFail') === '1') { fail({ name: 'SecurityError', message: 'Permission denied' }); return; }
+          window.__mock.sources.push(source.type + ' ' + source.number);
+          ok(source, 'MAIN');
+        }, 10);
       }
     },
     tvinputdevice: {

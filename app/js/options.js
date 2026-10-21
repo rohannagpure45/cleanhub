@@ -46,6 +46,13 @@
     music: [
       { id: 'on', name: 'On' },
       { id: 'off', name: 'Off' }
+    ],
+    input: [
+      { id: 'off', name: 'Off' },
+      { id: 'hdmi1', name: 'HDMI 1' },
+      { id: 'hdmi2', name: 'HDMI 2' },
+      { id: 'hdmi3', name: 'HDMI 3' },
+      { id: 'hdmi4', name: 'HDMI 4' }
     ]
   };
 
@@ -62,6 +69,7 @@
     { id: 'ambient', label: 'Ambient on Home' },
     { id: 'wallpaper', label: 'Ambient wallpaper' },
     { id: 'music', label: 'Ambient music' },
+    { id: 'input', label: 'Fire TV on Home' },
     { id: 'reset', kind: 'action', label: 'Reset to defaults' }
   ];
 })(typeof window !== 'undefined' ? window : globalThis);

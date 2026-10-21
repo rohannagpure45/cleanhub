@@ -107,6 +107,50 @@
     });
   }
 
+  // The TV's inputs, e.g. connected: [{ type: 'HDMI', number: 2 }]. Needs no
+  // privilege. Keeps Tizen's own objects so setSource gets what it expects.
+  function listInputs() {
+    return new Promise(function (resolve, reject) {
+      if (!onTV() || !tizen().systeminfo) {
+        reject(new Error('Not running on a TV'));
+        return;
+      }
+      try {
+        tizen().systeminfo.getPropertyValue('VIDEOSOURCE', function (v) {
+          resolve({ connected: v.connected || [], disconnected: v.disconnected || [] });
+        }, function (err) {
+          reject(new Error(err && err.message ? err.message : 'VIDEOSOURCE failed'));
+        });
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  // Points the TV's main picture at an input (tv.window privilege).
+  function setSource(source) {
+    return new Promise(function (resolve, reject) {
+      try {
+        tizen().tvwindow.setSource(source, function () { resolve(); }, function (err) {
+          reject(new Error(err && err.message ? err.message : 'setSource failed'));
+        });
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  // Steps aside so the TV shows its main picture (and the remote reaches the
+  // device on it); Clean Hub keeps running in the background.
+  function hide() {
+    try {
+      tizen().application.getCurrentApplication().hide();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Tizen hands back plain filesystem paths for icons.
   function iconUrl(path) {
     if (!path) return null;
@@ -134,6 +178,9 @@
     keyName: keyName,
     listApps: listApps,
     launch: launch,
+    listInputs: listInputs,
+    setSource: setSource,
+    hide: hide,
     iconUrl: iconUrl,
     now: now
   };

@@ -38,11 +38,23 @@
     id: 'cleanhub:ambient',
     name: 'Ambient',
     key: 'ambient',
-    builtin: true,
+    builtin: 'ambient',
     svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
     bg: '#16110D',
     fg: '#E3B97A'
+  };
+
+  // Switches the TV to the HDMI input picked in Settings ('Fire TV on Home').
+  const INPUT = {
+    id: 'cleanhub:input',
+    name: 'Fire TV',
+    key: 'input',
+    builtin: 'input',
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+    bg: '#14181F',
+    fg: '#FF9900'
   };
 
   function storage() {
@@ -89,8 +101,12 @@
   }
 
   // What Home shows: Ambient, then the apps.
+  // What Home shows: Ambient, the Fire TV input, then the apps.
   function homeItems() {
-    return state.settings.ambient === 'on' ? [AMBIENT].concat(state.home) : state.home;
+    const builtins = [];
+    if (state.settings.ambient === 'on') builtins.push(AMBIENT);
+    if (state.settings.input !== 'off') builtins.push(INPUT);
+    return builtins.concat(state.home);
   }
 
   // The saved list, made explicit the first time the viewer edits it.
@@ -157,7 +173,8 @@
     if (key === 'ok') {
       const item = homeItems()[state.homeIndex];
       if (onGear()) openSettings();
-      else if (item && item.builtin) openAmbient();
+      else if (item && item.builtin === 'ambient') openAmbient();
+      else if (item && item.builtin === 'input') showInput();
       else launch(item);
       return;
     }
@@ -224,7 +241,7 @@
   function changeSettings(next) {
     const prev = state.settings;
     const relayout = next.layout !== prev.layout || next.clock !== prev.clock ||
-      next.icons !== prev.icons || next.ambient !== prev.ambient;
+      next.icons !== prev.icons || next.ambient !== prev.ambient || next.input !== prev.input;
     // Remember the app by id: showing or hiding Ambient shifts every index.
     const remembered = homeItems()[state.homeIndex];
     state.settings = next;
@@ -432,6 +449,30 @@
       state.appsFocus = row.entry.id; // follow it, so OK puts it straight back
       renderApps();
     }
+  }
+
+  // ---- Fire TV input ------------------------------------------------------------
+
+  // Points the TV at the chosen HDMI input, then steps aside so the picture
+  // and the remote belong to the device there. Clean Hub stays running.
+  function showInput() {
+    const number = Number(state.settings.input.replace('hdmi', ''));
+    const label = CH.store.label('input', state.settings.input);
+    CH.ui.pressHome(state.homeIndex);
+    CH.platform.listInputs().then(function (inputs) {
+      const all = inputs.connected.concat(inputs.disconnected);
+      let source = null;
+      all.forEach(function (s) {
+        if (s.type === 'HDMI' && Number(s.number) === number) source = s;
+      });
+      if (!source) throw new Error(label + ' isn’t on this TV');
+      if (inputs.connected.indexOf(source) === -1) CH.ui.toast('Nothing seems to be connected to ' + label);
+      return CH.platform.setSource(source);
+    }).then(function () {
+      CH.platform.hide();
+    }).catch(function () {
+      CH.ui.toast('Couldn’t switch to ' + label);
+    });
   }
 
   // ---- Ambient ----------------------------------------------------------------

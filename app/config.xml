@@ -6,7 +6,7 @@
   - required_version must not exceed the TV's Tizen version (6.5 on 2022 sets).
   - Only public-level privileges, so a plain Tizen developer certificate can
     sign it: application.launch opens other apps; application.info covers
-    getAppsInfo's extra fields.
+    getAppsInfo's extra fields; tv.window switches the TV to an HDMI input.
   - No <access> element and no internet privilege: the app runs fully offline.
 -->
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
@@ -19,6 +19,7 @@
   <name>Clean Hub</name>
   <tizen:privilege name="http://tizen.org/privilege/application.info"/>
   <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+  <tizen:privilege name="http://tizen.org/privilege/tv.window"/>
   <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
                  encryption="disable" install-location="auto" hwkey-event="enable"/>
 </widget>

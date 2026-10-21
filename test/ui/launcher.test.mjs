@@ -288,7 +288,8 @@ test('reset needs a second OK, and confirms in the sheet rather than a toast', a
   await press('ArrowDown', 2); // Background
   await press('ArrowRight');
   assert.equal((await state()).settings.theme, 'tide');
-  await press('ArrowDown', 8); // Reset
+  const labels = await page.$$eval('#sheet .sheet-label', (els) => els.map((e) => e.textContent));
+  await press('ArrowDown', labels.indexOf('Reset to defaults') - 2); // from Background to Reset
   await press('Enter');
   assert.equal((await state()).settings.theme, 'tide', 'first OK only asks');
   assert.match(await focusedSheet(), /Press OK again/);
@@ -678,4 +679,40 @@ test('if no track will play, Ambient says so instead of looping', async () => {
 test('with no music bundled, Ambient is a quiet wallpaper', async () => {
   await openAmbient('?music=none');
   assert.match(await ambientText(), /No music bundled/);
+});
+
+// ---- Fire TV input ----------------------------------------------------------------
+
+test('Fire TV on Home switches the TV to its HDMI input and steps aside', async () => {
+  await open('', { settings: S({ input: 'hdmi4' }) });
+  const names = await page.$$eval('#home [data-app] .list-name', (els) => els.map((e) => e.textContent));
+  assert.deepEqual(names.slice(0, 3), ['Ambient', 'Fire TV', 'Netflix']);
+  await press('ArrowDown');
+  assert.equal(await focusedHome(), 'Fire TV');
+  await press('Enter');
+  await page.waitForFunction(() => window.__mock.hidden === 1);
+  assert.deepEqual(await page.evaluate(() => window.__mock.sources), ['HDMI 4']);
+  assert.deepEqual(errors, []);
+});
+
+test('Fire TV warns about an empty input and reports a refused switch', async () => {
+  await open('?sourceFail=1', { settings: S({ input: 'hdmi1', ambient: 'off' }) });
+  assert.equal(await focusedHome(), 'Fire TV');
+  await press('Enter');
+  await page.waitForFunction(() => document.getElementById('toast').textContent.indexOf('Couldn’t switch') !== -1);
+  assert.equal(await page.evaluate(() => window.__mock.hidden), 0, 'stays on screen when the switch fails');
+});
+
+test('the Fire TV item comes and goes with its setting, keeping focus on the same app', async () => {
+  await open('', { settings: S({ ambient: 'off' }) });
+  await press('ArrowDown'); // YouTube
+  await openSettings();
+  const rows = await page.$$eval('#sheet .sheet-label', (els) => els.map((e) => e.textContent));
+  await press('ArrowDown', rows.indexOf('Fire TV on Home'));
+  await press('ArrowLeft'); // Off -> HDMI 4 (wraps)
+  assert.equal((await state()).settings.input, 'hdmi4');
+  await press('Escape');
+  assert.equal((await homeNames())[0], 'Fire TV');
+  await press('ArrowLeft');
+  assert.equal(await focusedHome(), 'YouTube');
 });

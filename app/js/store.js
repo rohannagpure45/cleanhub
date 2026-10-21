@@ -18,6 +18,7 @@
     ambient: 'on',
     wallpaper: 'lamp',
     music: 'on',
+    input: 'off', // which HDMI input the Home 'Fire TV' item switches to
     apps: null // null = not chosen yet; the home screen picks recognised apps
   };
 
