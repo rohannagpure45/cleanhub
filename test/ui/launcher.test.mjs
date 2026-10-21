@@ -1218,6 +1218,20 @@ test('Shuffle is the last row of the music checklist, and can be turned off', as
   assert.match(await page.$eval('#sheet .sheet-sub', (e) => e.textContent), /Playing 2 of 7, shuffled/);
   await press('ArrowDown', GENRES.length); // past the genres
   assert.equal(await focusedSheet(), 'Shuffle');
+  // The sheet slides: wait for it to settle with Shuffle in view.
+  await page.waitForFunction(() => {
+    const v = document.querySelector('#sheet .sheet-view').getBoundingClientRect();
+    const f = document.querySelector('#sheet .sheet-row.is-focused').getBoundingClientRect();
+    return f.top >= v.top - 1 && f.bottom <= v.bottom + 1;
+  }, null, { timeout: 3000 });
+  const sliver = await page.evaluate(() => {
+    const v = document.querySelector('#sheet .sheet-view').getBoundingClientRect();
+    return [...document.querySelectorAll('#sheet .sheet-track > :not(.pill)')].some((el) => {
+      const b = el.getBoundingClientRect();
+      return b.top < v.top - 1 && b.bottom > v.top + 1;
+    });
+  });
+  assert.equal(sliver, false, 'nothing half-cut under the title');
   assert.match(await sheetHint(), /OK\s*Turn off/);
   await press('Enter');
   assert.equal((await state()).settings.shuffle, 'off');

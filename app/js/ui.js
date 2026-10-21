@@ -591,13 +591,20 @@
     if (el.offsetTop - margin < offset) offset = el.offsetTop - margin;
     if (el.offsetTop + el.offsetHeight + margin > offset + view) offset = el.offsetTop + el.offsetHeight + margin - view;
     offset = Math.max(0, Math.min(max, offset));
+    // Snap to the top of a row or section at or above that. Near the end of a
+    // list, less than a row from the bottom, that can leave the focused row
+    // cut off below; then snap to the first one that shows it whole instead.
+    const fits = el.offsetTop + el.offsetHeight - view;
     let snapped = 0;
+    let below = Infinity;
     const kids = sheet.track.children;
     for (let i = 0; i < kids.length; i++) {
       const top = kids[i].offsetTop;
-      if (kids[i] !== sheet.pill && top <= offset + 0.5 && top > snapped) snapped = top;
+      if (kids[i] === sheet.pill) continue;
+      if (top <= offset + 0.5 && top > snapped) snapped = top;
+      if (top >= fits - 0.5 && top < below) below = top;
     }
-    return snapped;
+    return snapped >= fits - 0.5 || below === Infinity ? snapped : below;
   }
 
   function focusSheet(index, instant) {
