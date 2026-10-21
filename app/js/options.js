@@ -38,11 +38,16 @@
       { id: 'on', name: 'Shown' },
       { id: 'off', name: 'Hidden' }
     ],
-    // 'dark' ones are almost all black (low power on a local-dimming TV);
-    // scenes are full colour; Rotate shows the scenes in turn.
+    // 'dark' ones are almost all black (low power on a local-dimming TV),
+    // from Lamp to night scenes lit by one light; scenes are full colour;
+    // Rotate shows the scenes in turn.
     wallpaper: [
       { id: 'lamp', name: 'Lamp', kind: 'dark' },
       { id: 'midnight', name: 'Midnight', kind: 'dark' },
+      { id: 'streetlamp', name: 'Street Lamp', kind: 'dark' },
+      { id: 'moonrise', name: 'Moonrise', kind: 'dark' },
+      { id: 'lighthouse', name: 'Lighthouse', kind: 'dark' },
+      { id: 'fireflies', name: 'Fireflies', kind: 'dark' },
       { id: 'black', name: 'Black', kind: 'dark' },
       { id: 'sunset', name: 'Sunset', kind: 'scene' },
       { id: 'coast', name: 'Coast', kind: 'scene' },

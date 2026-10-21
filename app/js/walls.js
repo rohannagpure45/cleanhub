@@ -56,6 +56,177 @@
         "delay": 12
       }
     ],
+    "streetlamp": [
+      {
+        "src": "img/wall/streetlamp/base.jpg",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      {
+        "src": "img/wall/streetlamp/snow-far.webp",
+        "x": 0,
+        "y": 0,
+        "w": 840,
+        "h": 1440,
+        "anim": "wall-sink-720 70s linear -9.78903388885682s infinite",
+        "box": {
+          "x": 180,
+          "y": 280,
+          "w": 840,
+          "h": 720,
+          "mask": "radial-gradient(400px 540px at 420px 240px, #000 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0) 100%)"
+        }
+      },
+      {
+        "src": "img/wall/streetlamp/snow-near.webp",
+        "x": 0,
+        "y": 0,
+        "w": 840,
+        "h": 1440,
+        "anim": "wall-sink-720 38s linear -14.19754567221289s infinite",
+        "box": {
+          "x": 180,
+          "y": 280,
+          "w": 840,
+          "h": 720,
+          "mask": "radial-gradient(400px 540px at 420px 240px, #000 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0) 100%)"
+        }
+      }
+    ],
+    "moonrise": [
+      {
+        "src": "img/wall/moonrise/base.jpg",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      {
+        "src": "img/wall/moonrise/glint0.webp",
+        "x": 682,
+        "y": 669,
+        "w": 1056,
+        "h": 411,
+        "anim": "wall-pulse 2.8s ease-in-out -0.0s infinite"
+      },
+      {
+        "src": "img/wall/moonrise/glint1.webp",
+        "x": 682,
+        "y": 669,
+        "w": 1056,
+        "h": 411,
+        "anim": "wall-pulse 2.8s ease-in-out -1.4s infinite"
+      },
+      {
+        "src": "img/wall/moonrise/clouds.webp",
+        "x": 0,
+        "y": 0,
+        "w": 3840,
+        "h": 260,
+        "anim": "wall-drift-1920 320s linear -110s infinite",
+        "box": {
+          "x": 510,
+          "y": 420,
+          "w": 1400,
+          "h": 260,
+          "mask": "radial-gradient(560px 190px at 700px 128px, #000 0%, rgba(0,0,0,0.4) 45%, rgba(0,0,0,0) 100%)"
+        }
+      }
+    ],
+    "lighthouse": [
+      {
+        "src": "img/wall/lighthouse/base.jpg",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      {
+        "src": "img/wall/lighthouse/surf.webp",
+        "x": 0,
+        "y": 704,
+        "w": 1920,
+        "h": 18,
+        "anim": "wall-glimmer 7.5s ease-in-out -2s infinite"
+      },
+      {
+        "src": "img/wall/lighthouse/beam-left.webp",
+        "x": 0,
+        "y": 127,
+        "w": 1540,
+        "h": 420,
+        "anim": "wall-beam 24s ease-in-out -4.800000000000001s infinite",
+        "origin": "1540px 210px"
+      },
+      {
+        "src": "img/wall/lighthouse/beam-right.webp",
+        "x": 1540,
+        "y": 127,
+        "w": 380,
+        "h": 420,
+        "anim": "wall-beam 24s ease-in-out -16.8s infinite",
+        "origin": "0px 210px"
+      },
+      {
+        "src": "img/wall/lighthouse/flash.webp",
+        "x": 1280,
+        "y": 77,
+        "w": 520,
+        "h": 520,
+        "anim": "wall-flash 24s linear -4.800000000000001s infinite"
+      }
+    ],
+    "fireflies": [
+      {
+        "src": "img/wall/fireflies/base.jpg",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      {
+        "src": "img/wall/fireflies/flies0.webp",
+        "x": 0,
+        "y": 432,
+        "w": 3840,
+        "h": 618,
+        "anim": "wall-drift-1920 900s linear -564.7705608007735s infinite, wall-blink 4.7s ease-out -3.3s infinite"
+      },
+      {
+        "src": "img/wall/fireflies/flies1.webp",
+        "x": 0,
+        "y": 432,
+        "w": 3840,
+        "h": 618,
+        "anim": "wall-drift-1920 1150s linear -949.7036800611169s infinite, wall-blink 5.9s ease-out -0.8s infinite"
+      },
+      {
+        "src": "img/wall/fireflies/flies2.webp",
+        "x": 0,
+        "y": 432,
+        "w": 3840,
+        "h": 618,
+        "anim": "wall-drift-1920 760s linear -175.5995010051965s infinite, wall-blink 7.3s ease-out -2.6s infinite"
+      },
+      {
+        "src": "img/wall/fireflies/flies3.webp",
+        "x": 0,
+        "y": 432,
+        "w": 3840,
+        "h": 618,
+        "anim": "wall-drift-1920 1300s linear -1142.8437515210069s infinite, wall-blink 8.6s ease-out -8.2s infinite"
+      },
+      {
+        "src": "img/wall/fireflies/flies4.webp",
+        "x": 0,
+        "y": 432,
+        "w": 3840,
+        "h": 618,
+        "anim": "wall-drift-1920 1000s linear -496.33006106097264s infinite, wall-blink 11.2s ease-out -2.0s infinite"
+      }
+    ],
     "sunset": [
       {
         "src": "img/wall/sunset/base.jpg",

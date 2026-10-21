@@ -23,13 +23,16 @@ exactly as they are.
 - **Ambient, first on Home.** A wallpaper, a small clock and music from the
   genres you tick in Settings (original jazz, 1920s, classical, piano,
   ragtime, big band, ambient), made to leave on all day (see
-  [docs/TV-SETUP.md](docs/TV-SETUP.md#ambient-leaving-it-on-all-day)). Three
-  wallpapers are near-black and low power (Lamp, Midnight, Black); six are
+  [docs/TV-SETUP.md](docs/TV-SETUP.md#ambient-leaving-it-on-all-day)). Seven
+  wallpapers are near-black and low power: Lamp, Midnight and Black, and four
+  night scenes lit by one light (Street Lamp, Moonrise, Lighthouse,
+  Fireflies); six are
   full-colour scenes (Sunset, Coast, Dunes, Aurora, City Rain, Deco); Rotate
   shows a new scene every 15 minutes. ▲▼ in Ambient change it, with a
   cross-fade. They move: clouds, mist, aurora, blowing sand and traffic drift
   left to right; glitter, stars and city lights shimmer; Deco's sunburst
-  turns. Settings → Wallpaper motion: Off keeps them still.
+  turns; snow falls through the street lamp's light, clouds cross the moon,
+  the lighthouse beam sweeps round and fireflies blink. Settings → Wallpaper motion: Off keeps them still.
 - **Brainrot mode.** The last row of Settings turns Ambient into a TikTok-style
   feed of ten kinds of video: split-screen stories over an endless runner,
   texting stories over sky parkour, a ball escaping rings, aura ratings,

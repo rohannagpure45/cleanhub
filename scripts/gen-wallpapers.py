@@ -9,6 +9,9 @@ Kinds, matching CH.options.wallpaper in app/js/options.js:
 - dark (lamp, midnight; black needs no file): almost entirely pure black, so
   a local-dimming TV can switch most of its backlight zones off. Their motion
   is small: dust in the lamp light, twinkling stars and a shooting star.
+- night scenes (streetlamp, moonrise, lighthouse, fireflies): dark like
+  Lamp, one light in the dark, but each a place. Snow falls through the
+  lamplight, clouds cross the moon, the beam sweeps, fireflies blink.
 - scenes (sunset, coast, dunes, aurora, rain, deco): full colour. Clouds,
   mist, aurora, sand and traffic drift left to right; glitter, stars and
   bokeh shimmer; Deco's sunburst turns and a sheen crosses its gold.
@@ -199,11 +202,21 @@ def tile2(arr):
     return np.concatenate([arr, arr], axis=1)
 
 
+def tile2v(arr):
+    """Two copies of a seamless tile, one above the other: a sinking layer."""
+    return np.concatenate([arr, arr], axis=0)
+
+
 # ---- Layered wallpapers ----------------------------------------------------------
 
 # CSS animations (keyframes in app/css/app.css). Drifts move left to right.
 def drift(seconds, delay=0.0, period=TILE):
     return f"wall-drift-{period} {seconds}s linear {-delay}s infinite"
+
+
+def sink(seconds, delay=0.0, period=720):
+    """Slides down one tile per cycle (snow)."""
+    return f"wall-sink-{period} {seconds}s linear {-delay}s infinite"
 
 
 def pulse(kind, seconds, delay=0.0):
@@ -227,17 +240,20 @@ class Scene:
     picture (rgba, straight alpha) placed at x, y, with a CSS animation, or
     an effect drawn by CSS alone (raindrops, a shooting star)."""
 
-    def __init__(self, name, base):
+    def __init__(self, name, base, dark=False):
         self.name = name
         self.base = base
+        self.dark = dark  # dither only where there is light: black stays black
         self.layers = []
 
     def add(self, key, pic, x=0, y=0, anim="", still=1.0, lossless=False, box=None, origin=None, sheen=None):
         """still: the layer's opacity in the still picture (Motion: Off).
-        box: (x, y, w, h) that clips it. sheen: seconds per sweep of a soft
+        box: (x, y, w, h) that clips it, maybe with a CSS mask (x, y, w, h, mask). sheen: seconds per sweep of a soft
         band that shows it (app.css .wall-sheen)."""
         if anim.startswith("wall-drift"):
             check_seam(f"{self.name}/{key}", pic, int(anim.split()[0].rsplit("-", 1)[1]))
+        if anim.startswith("wall-sink"):
+            check_seam(f"{self.name}/{key}", pic.transpose(1, 0, 2), int(anim.split()[0].rsplit("-", 1)[1]))
         self.layers.append(dict(key=key, pic=pic, x=x, y=y, anim=anim, still=still,
                                 lossless=lossless, box=box, origin=origin, sheen=sheen))
 
@@ -253,7 +269,7 @@ class Scene:
                 continue
             pic, x, y = l["pic"], l["x"], l["y"]
             if l["box"]:
-                bx, by, bw, bh = l["box"]
+                bx, by, bw, bh = l["box"][:4]
                 pic = pic[max(-y, 0):bh - y, max(-x, 0):bw - x]
                 x, y = bx + max(x, 0), by + max(y, 0)
             h, w = pic.shape[:2]
@@ -267,11 +283,13 @@ class Scene:
         return img
 
 
-def save_rgb(img, path, quality=88):
-    """Dithered to 8 bits (no banding in big skies), 4:4:4 so thin lines keep their colour."""
+def save_rgb(img, path, quality=88, keep_black=False):
+    """Dithered to 8 bits (no banding in big skies), 4:4:4 so thin lines keep
+    their colour. keep_black: no dither where it's black."""
     rng = np.random.default_rng(99)
     arr = np.clip(img, 0, 1) * 255
-    arr = arr + rng.uniform(-0.5, 0.5, arr.shape) + rng.uniform(-0.5, 0.5, arr.shape)
+    noise = rng.uniform(-0.5, 0.5, arr.shape) + rng.uniform(-0.5, 0.5, arr.shape)
+    arr = np.where(arr.max(axis=-1, keepdims=True) > 0.2, arr + noise, arr) if keep_black else arr + noise
     out = Image.fromarray(np.clip(np.rint(arr), 0, 255).astype(np.uint8), "RGB")
     out.save(path, quality=quality, optimize=True, progressive=True, subsampling=0)
     return out
@@ -294,7 +312,7 @@ def write_scene(scene):
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
-    save_rgb(scene.base, folder / "base.jpg", quality=86)
+    save_rgb(scene.base, folder / "base.jpg", quality=86, keep_black=scene.dark)
     entries = [dict(src=f"img/wall/{scene.name}/base.jpg", x=0, y=0, w=W, h=H)]
     pixels = W * H
     for l in scene.layers:
@@ -311,14 +329,16 @@ def write_scene(scene):
         if l["origin"]:
             e["origin"] = l["origin"]
         if l["box"]:
-            bx, by, bw, bh = l["box"]
+            bx, by, bw, bh = l["box"][:4]
             e["box"] = dict(x=bx, y=by, w=bw, h=bh)
+            if len(l["box"]) > 4:
+                e["box"]["mask"] = l["box"][4]
         if l["sheen"]:
             e["sheen"] = l["sheen"]
         entries.append(e)
         pixels += w * h
     still = scene.still()
-    out = save_rgb(still, OUT / f"ambient-{scene.name}.jpg")
+    out = save_rgb(still, OUT / f"ambient-{scene.name}.jpg", keep_black=scene.dark)
     out.resize(THUMB, Image.LANCZOS).save(OUT / f"thumb-wall-{scene.name}.jpg", quality=88)
     size = sum(f.stat().st_size for f in folder.iterdir()) // 1024
     print(f"{scene.name}: {len(scene.layers)} layers, {pixels / 1e6:.1f} MP to composite, {size} KB "
@@ -860,6 +880,431 @@ def deco():
     return scene
 
 
+# ---- Night scenes ---------------------------------------------------------------
+# Like Lamp: almost all black, lit by one light, but each one a place.
+
+def rect(x0, x1, y0, y1):
+    """Antialiased filled rectangle coverage (H, W)."""
+    return (np.clip(XX - x0 + 0.5, 0, 1) * np.clip(x1 - XX + 0.5, 0, 1)
+            * np.clip(YY - y0 + 0.5, 0, 1) * np.clip(y1 - YY + 0.5, 0, 1))
+
+
+def taper(x, y0, y1, w0, w1):
+    """A vertical bar centred on x, w0 wide at y0 and w1 at y1 (y0 < y1)."""
+    t = np.clip((YY - y0) / max(y1 - y0, 1e-3), 0, 1)
+    half = (w0 + (w1 - w0) * t) / 2
+    return np.clip(half - np.abs(XX - x) + 0.5, 0, 1) * np.clip(YY - y0 + 0.5, 0, 1) * np.clip(y1 - YY + 0.5, 0, 1)
+
+
+def segment(cov, x0, y0, x1, y1, w0, w1):
+    """Adds a tapering stroke from (x0, y0), w0 wide, to (x1, y1), w1 wide."""
+    pad = max(w0, w1) / 2 + 2
+    xa, xb = int(max(min(x0, x1) - pad, 0)), int(min(max(x0, x1) + pad + 1, W))
+    ya, yb = int(max(min(y0, y1) - pad, 0)), int(min(max(y0, y1) + pad + 1, H))
+    if xb <= xa or yb <= ya:
+        return
+    px, py = XX[ya:yb, xa:xb], YY[ya:yb, xa:xb]
+    dx, dy = x1 - x0, y1 - y0
+    t = np.clip(((px - x0) * dx + (py - y0) * dy) / max(dx * dx + dy * dy, 1e-6), 0, 1)
+    d = np.sqrt((px - x0 - t * dx) ** 2 + (py - y0 - t * dy) ** 2)
+    c = np.clip((w0 + (w1 - w0) * t) / 2 - d + 0.5, 0, 1)
+    cov[ya:yb, xa:xb] = np.maximum(cov[ya:yb, xa:xb], c)
+
+
+def soft_dots(shape, dots, colour, wrap_x=False, wrap_y=False):
+    """Light (h, w, 3) of soft round dots: (x, y, radius, brightness) each,
+    a bright core in a faint halo. wrap_*: the picture is a seamless tile."""
+    h, w = shape
+    out = np.zeros((h, w, 3), np.float32)
+    for x, y, r, b in dots:
+        reach = int(r * 5) + 2
+        for ox in ((-w, 0, w) if wrap_x else (0,)):
+            for oy in ((-h, 0, h) if wrap_y else (0,)):
+                cx, cy = x + ox, y + oy
+                xa, xb = max(int(cx - reach), 0), min(int(cx + reach + 1), w)
+                ya, yb = max(int(cy - reach), 0), min(int(cy + reach + 1), h)
+                if xb <= xa or yb <= ya:
+                    continue
+                gy, gx = np.mgrid[ya:yb, xa:xb].astype(np.float32)
+                d2 = ((gx - cx) ** 2 + (gy - cy) ** 2) / (r * r)
+                out[ya:yb, xa:xb] += ((np.exp(-d2 * 1.4) + 0.16 * np.exp(-d2 / 9)) * b)[..., None] * colour
+    return out
+
+
+def faint_stars(img, rng, count, y1, avoid=None, level=(0.04, 0.16)):
+    """Adds dim single-pixel stars above y1 (not within avoid=(x, y, r))."""
+    for _ in range(count):
+        x, y = int(rng.uniform(8, W - 8)), int(rng.uniform(8, y1))
+        if avoid and (x - avoid[0]) ** 2 + (y - avoid[1]) ** 2 < avoid[2] ** 2:
+            continue
+        b = rng.uniform(*level) * (1 - 0.7 * y / y1)
+        img[y, x] += b * rgb("#DDE6FF")
+        if b > 0.12:
+            img[y - 1:y + 2, x] += b * 0.3 * rgb("#DDE6FF")
+            img[y, x - 1:x + 2] += b * 0.3 * rgb("#DDE6FF")
+
+
+def streetlamp():
+    """A cast-iron street lamp on a foggy winter night. Its light falls in a
+    cone through the mist onto wet cobbles and an empty bench; further along
+    the path, three more lamps. Snow drifts down through the light."""
+    n = Noise(71)
+    rng = np.random.default_rng(71)
+    hy = 600  # eye level: the cobbles recede to here
+    ground, lx = 930, 600  # where the near lamp stands
+    vx = 1660  # the path's vanishing point
+    lamps = [(lx, ground, 1.0)] + [(vx + (lx - vx) * s, hy + (ground - hy) * s, s) for s in (0.40, 0.22, 0.12)]
+    iron = np.zeros((H, W), np.float32)
+    glass = np.zeros((H, W), np.float32)
+    fog = np.zeros((H, W, 3), np.float32)
+    pool = np.zeros((H, W), np.float32)
+    fogn = 0.7 + 0.3 * n.fbm(XX / 260, YY / 180, 4)
+    bulbs = []
+    for x, base, s in lamps:
+        # Plinth, post, collar, lantern (a glass box wider at the top), cap.
+        top = base - 646 * s
+        iron = np.maximum(iron, rect(x - 15 * s, x + 15 * s, base - 30 * s, base))
+        iron = np.maximum(iron, taper(x, base - 590 * s, base - 30 * s, 9 * s, 16 * s))
+        iron = np.maximum(iron, rect(x - 10 * s, x + 10 * s, base - 598 * s, base - 588 * s))
+        pane = taper(x, top, base - 598 * s, 40 * s, 26 * s)
+        bars = np.maximum(taper(x - 8 * s, top, base - 598 * s, 2 * s, 2 * s), taper(x + 8 * s, top, base - 598 * s, 2 * s, 2 * s))
+        glass = np.maximum(glass, pane * (1 - bars))
+        iron = np.maximum(iron, taper(x, top - 26 * s, top + 2 * s, 8 * s, 56 * s))
+        iron = np.maximum(iron, disc(x, top - 30 * s, 4 * s))
+        by = base - 620 * s
+        bulbs.append((x, by, s))
+        # The light: a halo in the fog round the lantern (dimmer above the
+        # cap), and a cone of lit fog below it that fades out at the ground.
+        d = np.sqrt((XX - x) ** 2 + (YY - by) ** 2)
+        above = 1 - 0.55 * smoothstep(by - 20 * s, by - 90 * s, YY)
+        halo = (np.exp(-(d / (120 * s)) ** 2 * 2.2) * 0.22 + np.exp(-(d / (420 * s)) ** 2 * 2.2) * 0.035) * above
+        ang = np.arctan2(XX - x, np.maximum(YY - by, 1e-3))
+        cone = (np.exp(-(ang / 0.44) ** 4) * (YY > by) / (1 + (d / (300 * s)) ** 2)
+                * smoothstep(20 * s, 110 * s, d) * (1 - smoothstep(base - 90 * s, base + 30 * s, YY)))
+        fog += ((halo + cone * 0.24) * fogn * (0.55 + 0.45 * s))[..., None] * rgb("#FFB26C")
+        # Its pool of light on the ground, longer towards us than away.
+        ry = np.where(YY < base, 46 * s, 130 * s)
+        pool += np.exp(-(((XX - x) / (420 * s)) ** 2 + ((YY - base - 12 * s) / ry) ** 2) * 2.4) * (0.5 + 0.5 * s)
+    # Cobbles in perspective: rows close up towards eye level, each row set
+    # off by its own amount, each stone rounded, worn and its own shade.
+    yb = np.maximum(YY - hy, 1)
+    gz = 6806 / yb
+    row = np.floor(gz)
+    gx = (XX - lx) * (380 / yb) / 46 * (1 + 0.18 * n(row * 1.7, 2.2)) + 3.7 * n(row * 2.9, 5.5)
+    gx = gx + 0.12 * n.fbm(gx * 2, gz * 2, 2)
+    fx, fz = gx - np.floor(gx) - 0.5, gz - row - 0.5
+    rough = 0.05 * n.fbm(gx * 6, gz * 6, 2)
+    stone = smoothstep(0.5, 0.30, (np.abs(fx) ** 3 + np.abs(fz) ** 3) ** (1 / 3) + rough)
+    shade = 0.72 + 0.28 * n(np.floor(gx) * 7.1, row * 3.3)
+    cob = (0.45 + 0.55 * stone * shade) * (YY > hy)
+    ground_light = (pool * cob * 0.26)[..., None] * rgb("#FFAE68")
+    # Wet stones: the near lantern smeared into a broken streak towards us.
+    below_lamp = np.maximum(YY - ground, 0)
+    streak = (np.exp(-((XX - lx) / (7 + below_lamp * 0.10)) ** 2) * (YY > ground - 6) * np.exp(-below_lamp / 220)
+              * np.clip(0.55 + 0.9 * n.fbm(XX / 9, YY / 2.5, 3), 0, 1) * stone)
+    ground_light += (streak * 0.42)[..., None] * rgb("#FFC890")
+    # The bench, right of the lamp, and its shadow thrown away from it.
+    bench = np.zeros((H, W), np.float32)
+    for y0 in (800, 818, 836):
+        bench = np.maximum(bench, rect(772, 1000, y0, y0 + 10))
+    bench = np.maximum(bench, rect(760, 1012, 862, 872))
+    for x0, y0, y1 in ((778, 800, 924), (992, 800, 924), (766, 868, 932), (1004, 868, 932)):
+        bench = np.maximum(bench, rect(x0 - 3, x0 + 3, y0, y1))
+    shadow = np.clip(rect(800, 1080, 924, 946) * 0.85, 0, 1)
+    ground_light *= (1 - blur(shadow, 6))[..., None]
+    img = ground_light + fog
+    # Iron and wood, almost black; a little lamplight on their top edges.
+    solid = np.maximum(iron, bench)
+    img = over(img, rgb("#060505"), solid * 0.94)
+    edge = np.clip(bench - np.roll(bench, 2, axis=0), 0, 1)
+    img += (edge * 0.20 * np.exp(-((XX - lx) / 520) ** 2))[..., None] * rgb("#FFB878")
+    # The lanterns' glass, bright, and the bulbs' glare over everything.
+    img = over(img, rgb("#FFD9A6"), glass * 0.92)
+    light = np.zeros((H, W, 3), np.float32)
+    for x, by, s in bulbs:
+        glow(light, x, by, 26 * s, "#FFF2DA", 0.95)
+        glow(light, x, by, 70 * s, "#FFC88A", 0.25)
+    img = screen(img, light)
+    scene = Scene("streetlamp", img, dark=True)
+    # Snow, only seen where the near lamp lights it: two seamless tiles
+    # sinking at different speeds, each masked to the cone of light.
+    bx, by0, bw, bh = lx - 420, 280, 840, 720
+    mask = f"radial-gradient(400px 540px at 420px 240px, #000 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0) 100%)"
+    for key, count, rad, bright, secs in (("snow-far", 170, (0.8, 1.5), (0.35, 0.6), 70),
+                                          ("snow-near", 46, (1.8, 3.0), (0.45, 0.8), 38)):
+        dots = [(rng.uniform(0, bw), rng.uniform(0, bh), rng.uniform(*rad), rng.uniform(*bright)) for _ in range(count)]
+        snow = soft_dots((bh, bw), dots, rgb("#FFE8CC"), wrap_x=True, wrap_y=True)
+        scene.add(key, tile2v(light_rgba(snow)), 0, 0, sink(secs, rng.uniform(0, secs)), still=0,
+                  box=(bx, by0, bw, bh, mask))
+    return scene
+
+
+def moonrise():
+    """A full moon just risen over still water, its path broken into
+    glitter; a far shore with two lit windows. Thin clouds cross the moon,
+    lit only near it, and the path glitters."""
+    n = Noise(81)
+    pn = Noise(82, wrap_x=3)
+    rng = np.random.default_rng(81)
+    hz = int(0.62 * H)
+    mx, my, mr = 1210, 548, 46
+    img = np.zeros((H, W, 3), np.float32)
+    sky = YY < hz
+    img += (sky * np.exp(-(hz - YY) / 140) * 0.035)[..., None] * rgb("#5A6E9A")
+    faint_stars(img, rng, 110, hz - 60, avoid=(mx, my, 380))
+    light = np.zeros((H, W, 3), np.float32)
+    glow(light, mx, my, 240, "#F2D7A6", 0.12)
+    glow(light, mx, my, 760, "#7A7468", 0.03)
+    img = screen(img, light * sky[..., None])
+    # The moon: maria, a darker limb.
+    d = np.sqrt((XX - mx) ** 2 + (YY - my) ** 2)
+    maria = 1 - 0.10 * smoothstep(-0.05, 0.4, n.fbm((XX - mx) / 30 + 40, (YY - my) / 30 + 40, 3))
+    limb = 0.82 + 0.18 * np.sqrt(np.clip(1 - (d / mr) ** 2, 0, 1))
+    moon = rgb("#F6E3BA") * (maria * limb)[..., None]
+    img = over(img, moon, disc(mx, my, mr, 1.2))
+    # The far shore: low hills on the left, a flat point on the right; two
+    # windows lit on the left.
+    def shore(x):
+        left = (1 - smoothstep(380, 900, x)) * (16 + 22 * (0.5 + 0.5 * n.fbm(x / 210, 3.3, 4)))
+        right = smoothstep(1560, 1800, x) * 9
+        return hz - left - right + 0.5
+    img = over(img, rgb("#010102"), below(shore) * (YY < hz + 1))
+    water = YY >= hz
+    z = np.maximum(YY - hz, 0)
+    img = np.where(water[..., None], (np.exp(-z / 40) * 0.05)[..., None] * rgb("#3E4A66"), img)
+    lights = np.zeros((H, W, 3), np.float32)
+    for wx_, wy in ((300, hz - 9), (342, hz - 6)):
+        lights += rect(wx_ - 1.5, wx_ + 1.5, wy - 1.5, wy + 1.5)[..., None] * rgb("#FFB65C") * 0.9
+        glow(lights, wx_, wy, 10, "#FFB65C", 0.25)
+        # Their reflections: short broken streaks.
+        r_ = np.exp(-((XX - wx_) / 2.2) ** 2) * (YY > hz + 1) * np.exp(-(YY - hz) / 26)
+        lights += (r_ * np.clip(0.5 + n.fbm(XX / 3, YY / 1.6, 2) * 1.5, 0, 1) * 0.5)[..., None] * rgb("#FFB65C")
+    img = screen(img, lights)
+    # The moon's path: noise laid out in perspective, as in Coast.
+    depth = 2600 / (z + 12)
+    wx = (XX - W / 2) / (z + 12) * 7
+    path = np.exp(-((XX - mx) / (12 + z * 0.40)) ** 2) * water
+    near = 0.6 * np.exp(-z / 500) + 0.4
+    calm = path * np.exp(-z / 30) * 0.30  # a steady sheen right under the moon
+    img = screen(img, ((path * 0.05 * near + calm))[..., None] * rgb("#F4DDB0"))
+    scene = Scene("moonrise", img, dark=True)
+    rows = slice(hz, H)
+    span = int(12 + (H - hz) * 0.40) * 3
+    x0, x1 = mx - span, mx + span
+    for k, off in enumerate([0.0, 1.4]):
+        # Long thin slivers: the noise is stretched along the swells.
+        g = np.clip((n.fbm(wx[rows, x0:x1] / 1.3 + 50 + 40 * k, depth[rows, x0:x1] / 0.07 + 13 * k, 3) - 0.24) * 4, 0, 1) ** 2
+        shine = path[rows, x0:x1] * g * near[rows, x0:x1] * 0.75
+        scene.add(f"glint{k}", light_rgba(shine[..., None] * rgb("#F6E2B8")), x0, hz,
+                  pulse("pulse", 2.8, off), still=1.0 if k == 0 else 0.12)
+    # Thin clouds, drifting; a mask round the moon so they show only where
+    # its light catches them.
+    c0, c1 = 420, 680
+    yy, xx = YY[c0:c1], XX[c0:c1]
+    # Wisps: stretched sideways, but not into ruled lines.
+    wisp = Noise(83, wrap_x=7).fbm(xx * 7 / TILE, yy / 30, 5) + 0.35 * pn.fbm(xx * 3 / TILE + 4, yy / 70, 2)
+    band = smoothstep(c0 + 20, c0 + 90, yy) * (1 - smoothstep(c1 - 110, c1 - 30, yy))
+    amount = np.clip((wisp - 0.12) * 1.7, 0, 1) ** 1.3 * band * 0.42
+    mask = "radial-gradient(560px 190px at 700px 128px, #000 0%, rgba(0,0,0,0.4) 45%, rgba(0,0,0,0) 100%)"
+    scene.add("clouds", tile2(rgba(rgb("#BFB29C"), amount)), 0, 0, drift(320, 110), still=0,
+              box=(mx - 700, c0, 1400, c1 - c0, mask))
+    return scene
+
+
+def lighthouse():
+    """A lighthouse on a headland at night, a keeper's cottage beside it
+    with one window lit, the sea dark below. The beam sweeps round: out
+    across the sea to the left, a flash as it faces us, then to the right.
+    The surf at the rocks glimmers."""
+    n = Noise(91)
+    rng = np.random.default_rng(91)
+    hz = int(0.66 * H)
+    tx, ty = 1540, 337  # the lantern
+    img = np.zeros((H, W, 3), np.float32)
+    sky = YY < hz
+    img += (sky * (np.exp(-(hz - YY) / 120) * 0.07 + np.exp(-(hz - YY) / 380) * 0.05))[..., None] * rgb("#4A6088")
+    faint_stars(img, rng, 150, hz - 80, avoid=(tx, ty, 260))
+    z = np.maximum(YY - hz, 0)
+    # The sea: the horizon's glow on long low swells.
+    swell = np.clip(n.fbm(XX / 420, z / 5 + 2600 / (z + 30), 3) * 0.5 + 0.5, 0, 1)
+    img += ((YY >= hz) * np.exp(-z / 90) * 0.045 * (0.5 + swell))[..., None] * rgb("#42577E")
+    # The lantern's reflection: a glitter column right down the water.
+    col = np.exp(-((XX - tx) / (5 + z * 0.08)) ** 2) * (YY > hz)
+    glit = np.clip((n.fbm((XX - tx) / 4, 2600 / (z + 12) / 0.3, 3) - 0.1) * 3, 0, 1)
+    img = screen(img, (col * glit * (0.12 + 0.25 * smoothstep(0, 360, z)))[..., None] * rgb("#FFD49A"))
+    # The headland, a sea stack, the tower, the cottage.
+    def land(x):
+        rise = smoothstep(1130, 1420, x)
+        return hz - rise * (118 + 14 * n.fbm(x / 70, 7.7, 4)) - 6 * n.fbm(x / 18, 2.2, 2) * rise + 0.5
+    cover = below(land) * (YY < hz + 1)
+    cover = np.maximum(cover, np.clip(1 - (((XX - 1062) / 22) ** 2 + ((YY - hz) / 34) ** 2), 0, 1) * 4 * (YY < hz + 1)).clip(0, 1)
+    base_y = float(land(np.array([tx], np.float32))[0]) + 6
+    tower = taper(tx, ty + 22, base_y, 30, 50)
+    cot_x0, cot_x1 = 1648, 1752
+    cot_y = float(land(np.array([1700.0], np.float32))[0]) + 4
+    house = np.maximum(rect(cot_x0, cot_x1, cot_y - 52, cot_y), taper(1700, cot_y - 84, cot_y - 50, 4, 118))
+    chimney = rect(1726, 1738, cot_y - 92, cot_y - 70)
+    shapes = np.maximum.reduce([cover, house, chimney])
+    img = over(img, rgb("#020304"), shapes)
+    # The tower, faintly white, lit from the lantern above: brighter at the
+    # top, a dark band round its middle.
+    fall = np.exp(-(YY - ty) / 160)
+    band = 1 - 0.55 * rect(0, W, ty + 120, ty + 160)
+    side = 0.75 + 0.25 * np.clip((XX - tx) / 22, -1, 1)
+    img = over(img, (rgb("#6C6458") * (0.12 + 0.55 * fall * band * side)[..., None]), tower)
+    # Gallery, lantern (glazed, with mullions), dome and finial.
+    gallery = np.maximum(rect(tx - 27, tx + 27, ty + 18, ty + 24), rect(tx - 25, tx + 25, ty + 6, ty + 7.5))
+    for k in range(-5, 6):
+        gallery = np.maximum(gallery, rect(tx + k * 5 - 0.6, tx + k * 5 + 0.6, ty + 6, ty + 18))
+    pane = rect(tx - 15, tx + 15, ty - 18, ty + 18)
+    mull = np.maximum.reduce([rect(tx + m - 1, tx + m + 1, ty - 18, ty + 18) for m in (-8, 0, 8)])
+    dome = np.clip(1 - (((XX - tx) / 18) ** 2 + ((YY - (ty - 18)) / 16) ** 2), 0, 1) * 6 * (YY < ty - 18)
+    finial = rect(tx - 1, tx + 1, ty - 42, ty - 30)
+    img = over(img, rgb("#FFE6B8"), pane * (1 - mull))
+    img = over(img, rgb("#0A0908"), np.maximum.reduce([gallery, dome.clip(0, 1), finial, mull * pane]))
+    # The cottage window.
+    win = rect(1688, 1704, cot_y - 36, cot_y - 18)
+    sash = np.maximum(rect(1695.4, 1696.6, cot_y - 36, cot_y - 18), rect(1688, 1704, cot_y - 27.6, cot_y - 26.4))
+    img = over(img, rgb("#FFAE58"), win * (1 - sash) * 0.9)
+    light = np.zeros((H, W, 3), np.float32)
+    glow(light, 1696, cot_y - 27, 26, "#FFAE58", 0.10)
+    glow(light, tx, ty, 34, "#FFF2D6", 0.55)
+    glow(light, tx, ty, 150, "#FFC27A", 0.12)
+    glow(light, tx, ty, 520, "#FF9E55", 0.03)
+    img = screen(img, light)
+    scene = Scene("lighthouse", img, dark=True)
+    # Surf where the rocks meet the sea.
+    sy0 = hz - 8
+    yy, xx = YY[sy0:hz + 10], XX[sy0:hz + 10]
+    foam = np.clip(n.fbm(xx / 14, yy / 3 + 5, 3) * 1.6 + 0.3, 0, 1) * np.exp(-((yy - hz) / 3.5) ** 2)
+    foam *= smoothstep(1110, 1200, xx) * (1 - smoothstep(1880, 1920, xx))
+    foam = np.maximum(foam, np.exp(-(((xx - 1062) / 26) ** 2 + ((yy - hz) / 3) ** 2)) * 0.8)
+    scene.add("surf", rgba(rgb("#9AAFC6"), foam * 0.32), 0, sy0, pulse("glimmer", 7.5, 2))
+    # The beam: a long cone of lit haze, one picture each way from the
+    # lantern. Each stretches out from the lantern and back (app.css
+    # wall-beam); the flash comes between them, as it faces us.
+    period = 24
+    ext = 210
+    def beam(length, sign):
+        ys, xs = np.mgrid[0:2 * ext, 0:length].astype(np.float32)
+        L = (length - xs) if sign < 0 else xs
+        cy = ext - L * 0.035
+        hw = 6 + L * 0.075
+        across = (ys - cy) / hw
+        haze = 0.75 + 0.25 * n.fbm(xs / 140 + 5 * sign, ys / 60, 3)
+        i_ = np.exp(-across ** 2 * 1.6) * (0.42 * np.exp(-L / 650) + 0.10 * np.exp(-L / 2200)) * smoothstep(0, 30, L) * haze
+        # Fade out before the picture ends: while the beam is drawn in, its
+        # end shows on screen.
+        i_ = i_ * (1 - smoothstep(0.55 * length, length, L))
+        return light_rgba(i_[..., None] * rgb("#FFE4B6"))
+    t0 = 0.2 * period  # the first frame: the beam most of the way out to the left
+    scene.add("beam-left", beam(tx, -1), 0, ty - ext, f"wall-beam {period}s ease-in-out {-t0}s infinite",
+              origin=f"{tx}px {ext}px", still=0.9)
+    scene.add("beam-right", beam(W - tx, 1), tx, ty - ext,
+              f"wall-beam {period}s ease-in-out {-(t0 + period / 2)}s infinite", origin=f"0px {ext}px", still=0)
+    fr = 260
+    fy, fx = np.mgrid[0:2 * fr, 0:2 * fr].astype(np.float32)
+    fd = np.sqrt((fx - fr) ** 2 + (fy - fr) ** 2)
+    flash = np.exp(-(fd / 60) ** 2) * 0.55 + np.exp(-(fd / 170) ** 2) * 0.18 + np.exp(-((fy - fr) / 3) ** 2 - ((fx - fr) / 150) ** 2) * 0.4
+    # Down to nothing well inside its square, or the square shows.
+    flash = flash * np.clip(1 - (fd / fr) ** 2, 0, 1) ** 2
+    scene.add("flash", light_rgba(flash[..., None] * rgb("#FFEFD0")), tx - fr, ty - fr,
+              f"wall-flash {period}s linear {-t0}s infinite", still=0)
+    return scene
+
+
+def fireflies():
+    """A meadow just after dusk: the last light low in the sky behind tall
+    grass and an old oak. Fireflies blink in the grass, each set to its own
+    rhythm, and wander slowly along."""
+    n = Noise(101)
+    rng = np.random.default_rng(101)
+    img = vertical([(0.0, "#000000"), (0.30, "#000104"), (0.55, "#040C1A"), (0.70, "#0B1E31"),
+                    (0.78, "#12293B"), (1.0, "#12293B")])
+    glow(img, 260, 0.80 * H, 700, "#3A2630", 0.10)  # afterglow, where the sun went down
+    faint_stars(img, rng, 70, int(0.45 * H), level=(0.03, 0.12))
+    xs = np.arange(W, dtype=np.float32)
+
+    def hill(x):
+        return 0.775 * H - 26 * (0.5 + 0.5 * n.fbm(x / 520 + 3, 1.1, 4)) - 3 * n.fbm(x / 6, 4.4, 2)
+    sil = below(hill)
+    # The oak: limbs forking from a short trunk, leaves in clumps at the
+    # ends of the twigs, so the crown is ragged with sky showing through.
+    ox, ground = 1470, float(hill(np.array([1470.0], np.float32))[0])
+    limbs = np.zeros((H, W), np.float32)
+    tips = []
+    trng = np.random.default_rng(7)
+
+    def branch(x, y, angle, length, width, depth):
+        # Two strokes with a kink, so no limb is ruler-straight.
+        bend = angle + trng.normal(0, 0.18)
+        mx_, my_ = x + math.cos(angle) * length * 0.5, y + math.sin(angle) * length * 0.5
+        ex, ey_ = mx_ + math.cos(bend) * length * 0.5, my_ + math.sin(bend) * length * 0.5
+        segment(limbs, x, y, mx_, my_, width, width * 0.85)
+        segment(limbs, mx_, my_, ex, ey_, width * 0.85, width * 0.7)
+        if depth == 0:
+            tips.append((ex, ey_, length))
+            return
+        kids = 3 if depth >= 3 and trng.random() < 0.5 else 2
+        for k in range(kids):
+            spread = (k - (kids - 1) / 2) * trng.uniform(0.55, 0.85) + trng.normal(0, 0.12)
+            a = min(max(bend + spread, -math.pi + 0.18), -0.18)
+            # Outer limbs spread wide and level, the way an oak in the open does.
+            a = a + (0.25 if a > -math.pi / 2 else -0.25) * (depth <= 3)
+            a = min(max(a, -math.pi + 0.12), -0.12)
+            branch(ex, ey_, a, length * trng.uniform(0.66, 0.8), width * 0.62, depth - 1)
+
+    segment(limbs, ox, ground + 4, ox, ground - 20, 64, 46)  # the flare at its foot
+    branch(ox, ground + 2, -math.pi / 2, 150, 44, 5)
+    e = np.full((H, W), -9, np.float32)
+    for tx_, ty_, ln in tips:
+        r = 42 + ln * 1.05
+        e = np.maximum(e, 1 - ((XX - tx_) / r) ** 2 - ((YY - ty_ + r * 0.25) / (r * 0.75)) ** 2)
+    leafy = e + 0.45 * n.fbm(XX / 40 + 9, YY / 40 + 9, 5) + 0.22 * n.fbm(XX / 9, YY / 9, 3)
+    crown = np.clip((leafy - 0.16) * 9, 0, 1)
+    sil = np.maximum.reduce([sil, crown, limbs])
+    # Tall grass in front: blades curving in the breeze, some with seed heads.
+    grass = np.zeros((H, W), np.float32)
+    for _ in range(900):
+        x0 = rng.uniform(-40, W + 40)
+        tall = rng.uniform(90, 330) * (1.25 if rng.random() < 0.15 else 1)
+        lean = rng.normal(0.25, 0.35) * tall * 0.35
+        y_end = H + 20 - tall
+        y0 = int(max(y_end, 0))
+        ys = np.arange(y0, H, dtype=np.float32)
+        t = np.clip((H + 20 - ys) / tall, 0, 1)
+        centre = x0 + lean * t * t
+        width = 0.6 + rng.uniform(1.4, 3.2) * (1 - t)
+        xa, xb = int(max(min(x0, x0 + lean) - 6, 0)), int(min(max(x0, x0 + lean) + 7, W))
+        if xb <= xa:
+            continue
+        gx = XX[y0:H, xa:xb]
+        c = np.clip(width[:, None] / 2 - np.abs(gx - centre[:, None]) + 0.5, 0, 1)
+        grass[y0:H, xa:xb] = np.maximum(grass[y0:H, xa:xb], c)
+        if rng.random() < 0.22:
+            hx, hy_ = x0 + lean, y_end
+            hl = rng.uniform(14, 26)
+            ang = math.atan2(lean * 2 / tall, 1)
+            segment(grass, hx - math.sin(ang) * 2, hy_ + 4, hx + math.sin(ang) * hl * 0.6, hy_ - hl, 4.5, 1.5)
+    sil = np.maximum(sil, grass)
+    img = over(img, rgb("#000000"), sil)
+    scene = Scene("fireflies", img, dark=True)
+    # Fireflies: five sets, each a seamless tile wandering slowly to the
+    # right, each blinking on its own beat (app.css wall-blink).
+    f0, f1 = int(0.40 * H), H - 30
+    for k, (beat, wander, still) in enumerate(((4.7, 900, 0.9), (5.9, 1150, 0.0), (7.3, 760, 0.6),
+                                                (8.6, 1300, 0.0), (11.2, 1000, 0.3))):
+        dots = []
+        for _ in range(13):
+            y = f0 + (f1 - f0) * rng.beta(2.6, 1.4)
+            near = (y - f0) / (f1 - f0)
+            dots.append((rng.uniform(0, TILE), y - f0, 1.4 + 1.6 * near, rng.uniform(0.6, 1.0)))
+        flies = soft_dots((f1 - f0, TILE), dots, rgb("#D6F46A"), wrap_x=True)
+        anim = drift(wander, rng.uniform(0, wander)) + f", wall-blink {beat}s ease-out {-rng.uniform(0, beat):.1f}s infinite"
+        scene.add(f"flies{k}", tile2(light_rgba(flies)), 0, f0, anim, still=still)
+    return scene
+
+
 # ---- Dark (low power) wallpapers ------------------------------------------------
 
 def dark_glow(img_arr, cx, cy, radius, colour, peak):
@@ -956,7 +1401,8 @@ def dark():
     return entries
 
 
-SCENES = {"sunset": sunset, "coast": coast, "dunes": dunes, "aurora": aurora, "rain": rain, "deco": deco}
+SCENES = {"streetlamp": streetlamp, "moonrise": moonrise, "lighthouse": lighthouse, "fireflies": fireflies,
+          "sunset": sunset, "coast": coast, "dunes": dunes, "aurora": aurora, "rain": rain, "deco": deco}
 
 
 def write_walls_js(entries):
