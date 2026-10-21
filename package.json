@@ -11,7 +11,8 @@
     "test": "node --test test/unit/*.test.mjs && node scripts/check-compat.mjs && python3 -m unittest discover -s test/py",
     "test:ui": "node --test test/ui/*.test.mjs",
     "test:all": "npm test && npm run test:ui",
-    "backgrounds": "node scripts/gen-backgrounds.mjs",
+    "backgrounds": "python3 scripts/gen-backgrounds.py",
+    "wallpapers": "python3 scripts/gen-wallpapers.py",
     "build": "node scripts/build.mjs"
   },
   "devDependencies": {

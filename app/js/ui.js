@@ -70,19 +70,17 @@
     el.style.backgroundPosition = (-x) + 'px ' + (-y) + 'px';
   }
 
-  // Keeps the theme images decoded-ready, so switching themes never flashes
-  // black while a 1920x1080 JPEG loads. Holding the Image objects keeps them
-  // in the memory cache.
-  const warmed = [];
+  // Keeps the theme images (and the Settings swatches) decoded-ready, so
+  // switching themes never flashes black while a 1920x1080 JPEG loads.
+  // Holding the Image objects keeps them in the memory cache.
+  const warmed = {};
 
-  function warmThemes(themes) {
-    if (warmed.length) return;
-    themes.forEach(function (t) {
-      ['bg-' + t, 'bg-' + t + '-blur', 'thumb-' + t].forEach(function (name) {
-        const img = new root.Image();
-        img.src = 'img/' + name + '.jpg';
-        warmed.push(img);
-      });
+  function warmImages(names) {
+    names.forEach(function (name) {
+      if (warmed[name]) return;
+      const img = new root.Image();
+      img.src = 'img/' + name + '.jpg';
+      warmed[name] = img;
     });
   }
 
@@ -406,15 +404,18 @@
     return inner;
   }
 
+  // Rows that show a small picture of their value: image name prefixes.
+  const SWATCHES = { theme: 'thumb-', wallpaper: 'thumb-wall-' };
+
   function optionRow(name, label, settings) {
     const row = h('div', 'sheet-row');
     row.setAttribute('data-option', name);
     row.appendChild(h('span', 'sheet-label', label));
     const value = h('span', 'sheet-value');
     value.insertAdjacentHTML('beforeend', ICONS.left);
-    if (name === 'theme') {
+    if (SWATCHES[name]) {
       const sw = h('span', 'swatch');
-      sw.style.backgroundImage = 'url(img/thumb-' + settings.theme + '.jpg)';
+      sw.style.backgroundImage = 'url(img/' + SWATCHES[name] + settings[name] + '.jpg)';
       value.appendChild(sw);
     }
     const text = h('span', 'sheet-value-text', CH.store.label(name, settings[name]));
@@ -583,13 +584,21 @@
 
   // ---- Ambient -------------------------------------------------------------------
 
-  // A near-black wallpaper with a small, dim clock and the track name. Nothing
-  // animates: the text block moves to another corner every few minutes (so no
-  // spot stays lit all day) and the clock changes once a minute.
+  // A wallpaper with a small clock and the track name. Nothing animates
+  // except fades: the text block moves to another corner every few minutes
+  // (so no spot stays lit all day), the clock changes once a minute, and a
+  // new wallpaper cross-fades in.
   const AMBIENT_SPOTS = ['spot-bl', 'spot-br', 'spot-tr', 'spot-tl'];
+  const WALL_FADE_MS = 900;
 
   const amb = {
     el: null,
+    walls: [], // two layers: the one in front, and the next one fading in over it
+    front: 0,
+    wallId: null,
+    wallSeq: 0,
+    wallTimer: null,
+    loading: null, // the next wallpaper's Image while it decodes
     text: null,
     title: null,
     status: null,
@@ -603,7 +612,12 @@
   function renderAmbient() {
     const el = amb.el;
     el.innerHTML = '';
-    el.appendChild(h('div', 'ambient-wall'));
+    const walls = h('div', 'ambient-walls');
+    amb.walls = [h('div', 'ambient-wall'), h('div', 'ambient-wall')];
+    amb.walls.forEach(function (w) { walls.appendChild(w); });
+    amb.front = 0;
+    amb.wallId = null;
+    el.appendChild(walls);
     const text = h('div', 'ambient-text ' + AMBIENT_SPOTS[amb.spot]);
     text.appendChild(clockEl());
     const now = h('div', 'ambient-now');
@@ -627,6 +641,72 @@
 
   function openAmbient(open) {
     amb.el.classList.toggle('is-open', open);
+  }
+
+  function wallKind(id) {
+    const opts = CH.options.wallpaper;
+    for (let i = 0; i < opts.length; i++) {
+      if (opts[i].id === id) return opts[i].kind;
+    }
+    return 'dark';
+  }
+
+  // Calls done() once wallpaper `id` is decoded (or after a short wait, so a
+  // slow or missing file never holds the change up).
+  function decodeWall(id, done) {
+    if (id === 'black') {
+      done();
+      return;
+    }
+    let called = false;
+    const finish = function () {
+      if (called) return;
+      called = true;
+      root.clearTimeout(timer);
+      done();
+    };
+    const timer = root.setTimeout(finish, 1500);
+    const img = new root.Image();
+    img.onload = finish;
+    img.onerror = finish;
+    img.src = 'img/ambient-' + id + '.jpg';
+    if (typeof img.decode === 'function') img.decode().then(finish, finish);
+    amb.loading = img;
+  }
+
+  // Shows wallpaper `id` (never 'rotate': main.js picks the scene). Instant
+  // when Ambient isn't on screen; otherwise the new picture cross-fades in
+  // over the old one once it has decoded, so nothing flashes black.
+  function showWall(id, instant) {
+    if (id === amb.wallId) return;
+    amb.wallId = id;
+    const seq = ++amb.wallSeq;
+    root.clearTimeout(amb.wallTimer);
+    const place = function () {
+      if (seq !== amb.wallSeq) return; // a newer choice took over
+      const old = amb.walls[amb.front];
+      amb.front = 1 - amb.front;
+      const next = amb.walls[amb.front];
+      amb.el.setAttribute('data-tone', wallKind(id) === 'dark' ? 'dark' : 'scene');
+      if (instant) {
+        next.className = 'ambient-wall wall-' + id + ' is-front is-instant';
+        old.className = 'ambient-wall';
+        return;
+      }
+      old.className = old.className.replace(/ is-front| is-instant/g, '') + ' is-under';
+      next.className = 'ambient-wall wall-' + id + ' is-front';
+      // The old picture leaves once the new one is fully in: on the fade's
+      // end, or a while later if the fade never ran (it was already shown).
+      const done = function () {
+        next.removeEventListener('transitionend', done);
+        root.clearTimeout(amb.wallTimer);
+        if (seq === amb.wallSeq) old.className = 'ambient-wall';
+      };
+      next.addEventListener('transitionend', done);
+      amb.wallTimer = root.setTimeout(done, WALL_FADE_MS * 3);
+    };
+    if (instant) place();
+    else decodeWall(id, place);
   }
 
   // st: CH.player.state(); musicOn: the Ambient music setting.
@@ -711,7 +791,7 @@
   CH.ui = {
     init: init,
     applyLook: applyLook,
-    warmThemes: warmThemes,
+    warmImages: warmImages,
     formatClock: formatClock,
     updateClock: updateClock,
     renderHome: renderHome,
@@ -724,6 +804,7 @@
     focusSheet: focusSheet,
     openSheet: openSheet,
     openAmbient: openAmbient,
+    showWall: showWall,
     updateAmbient: updateAmbient,
     showAmbientControls: showAmbientControls,
     moveAmbientText: moveAmbientText,

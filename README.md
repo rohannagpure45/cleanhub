@@ -19,9 +19,13 @@ exactly as they are.
 ## What you get
 
 - **Two layouts.** A big-type list, or a dock of tiles with a large clock.
-- **Ambient, first on Home.** A near-black, low-power wallpaper with a small
-  dim clock and a loop of jazz, made to leave on all day (see
-  [docs/TV-SETUP.md](docs/TV-SETUP.md#ambient-leaving-it-on-all-day)).
+- **Ambient, first on Home.** A wallpaper, a small clock and a loop of jazz,
+  made to leave on all day (see
+  [docs/TV-SETUP.md](docs/TV-SETUP.md#ambient-leaving-it-on-all-day)). Three
+  wallpapers are near-black and low power (Lamp, Midnight, Black); six are
+  full-colour scenes (Sunset, Coast, Dunes, Aurora, City Rain, Deco); Rotate
+  shows a new scene every 15 minutes. ▲▼ in Ambient change it, with a
+  cross-fade.
 - **Fire TV on Home.** One press switches the TV to the Fire Stick's HDMI
   input, full screen, in about 0.3 s.
 - **Settings is the button top right.** Press ▶ from the list, or ▲ from the
@@ -39,6 +43,11 @@ exactly as they are.
   requests.
 
 ![Ambient](docs/screens/ambient-lamp.png)
+
+![The six Ambient scenes](docs/screens/ambient-scenes.jpg)
+
+The wallpapers are drawn by `python3 scripts/gen-wallpapers.py` (numpy), so
+there are no image licences to track.
 
 ### What it can't do
 

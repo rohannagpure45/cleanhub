@@ -38,10 +38,19 @@
       { id: 'on', name: 'Shown' },
       { id: 'off', name: 'Hidden' }
     ],
+    // 'dark' ones are almost all black (low power on a local-dimming TV);
+    // scenes are full colour; Rotate shows the scenes in turn.
     wallpaper: [
-      { id: 'lamp', name: 'Lamp' },
-      { id: 'midnight', name: 'Midnight' },
-      { id: 'black', name: 'Black' }
+      { id: 'lamp', name: 'Lamp', kind: 'dark' },
+      { id: 'midnight', name: 'Midnight', kind: 'dark' },
+      { id: 'black', name: 'Black', kind: 'dark' },
+      { id: 'sunset', name: 'Sunset', kind: 'scene' },
+      { id: 'coast', name: 'Coast', kind: 'scene' },
+      { id: 'dunes', name: 'Dunes', kind: 'scene' },
+      { id: 'aurora', name: 'Aurora', kind: 'scene' },
+      { id: 'rain', name: 'City Rain', kind: 'scene' },
+      { id: 'deco', name: 'Deco', kind: 'scene' },
+      { id: 'rotate', name: 'Rotate', kind: 'rotate' }
     ],
     music: [
       { id: 'all', name: 'All' },

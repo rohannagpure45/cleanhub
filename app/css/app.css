@@ -856,6 +856,11 @@ html[data-layout="dock"] .toast {
   bottom: 440px;
 }
 
+/* Over Ambient there are no tiles, and mid-screen is where its controls are. */
+.ambient.is-open ~ .toast {
+  bottom: 64px;
+}
+
 .list-note {
   padding: 28px 32px 0;
 }
@@ -866,9 +871,11 @@ html[data-layout="dock"] .toast {
 }
 
 /* Ambient ---------------------------------------------------------------- */
-/* Built to leave on all day on a mini-LED panel: almost all black (dark zones
-   switch their LEDs off), one small dim text block, no animation except a
-   slow fade when the block moves corners every few minutes. */
+/* Built to leave on all day on a mini-LED panel. The dark wallpapers are
+   almost all black (dark zones switch their LEDs off) under one small dim
+   text block; the scenes are full colour under light text. No animation
+   except fades: the block moving corners every few minutes, and a new
+   wallpaper cross-fading in. */
 
 .ambient {
   position: absolute;
@@ -887,6 +894,18 @@ html[data-layout="dock"] .toast {
   display: block;
 }
 
+/* Its own stacking context, so the layers' z-index stays under the text. */
+.ambient-walls {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  z-index: 0;
+}
+
+/* Two layers. The new wallpaper fades in on top (is-front) while the old one
+   stays fully shown beneath it (is-under) until the fade is done. */
 .ambient-wall {
   position: absolute;
   left: 0;
@@ -895,13 +914,39 @@ html[data-layout="dock"] .toast {
   height: 1080px;
   background: #000 no-repeat 0 0;
   background-size: 1920px 1080px;
+  opacity: 0;
+  z-index: 0;
 }
 
-html[data-wallpaper="lamp"] .ambient-wall { background-image: url(../img/ambient-lamp.jpg); }
-html[data-wallpaper="midnight"] .ambient-wall { background-image: url(../img/ambient-midnight.jpg); }
+.ambient-wall.is-under {
+  opacity: 1;
+  z-index: 1;
+}
 
+.ambient-wall.is-front {
+  opacity: 1;
+  z-index: 2;
+  transition: opacity 900ms linear;
+}
+
+.ambient-wall.is-instant {
+  transition: none;
+}
+
+.ambient-wall.wall-lamp { background-image: url(../img/ambient-lamp.jpg); }
+.ambient-wall.wall-midnight { background-image: url(../img/ambient-midnight.jpg); }
+.ambient-wall.wall-sunset { background-image: url(../img/ambient-sunset.jpg); }
+.ambient-wall.wall-coast { background-image: url(../img/ambient-coast.jpg); }
+.ambient-wall.wall-dunes { background-image: url(../img/ambient-dunes.jpg); }
+.ambient-wall.wall-aurora { background-image: url(../img/ambient-aurora.jpg); }
+.ambient-wall.wall-rain { background-image: url(../img/ambient-rain.jpg); }
+.ambient-wall.wall-deco { background-image: url(../img/ambient-deco.jpg); }
+
+/* z-index 1 makes the text its own stacking context, so the scrim behind it
+   (z-index -1) stays above the wallpaper. */
 .ambient-text {
   position: absolute;
+  z-index: 1;
   opacity: 1;
   transition: opacity 1500ms linear;
 }
@@ -953,6 +998,7 @@ html[data-wallpaper="midnight"] .ambient-wall { background-image: url(../img/amb
 /* Shown for a few seconds after a key press. */
 .ambient-controls {
   position: absolute;
+  z-index: 1;
   left: 0;
   right: 0;
   top: 420px;
@@ -987,4 +1033,58 @@ html[data-wallpaper="midnight"] .ambient-wall { background-image: url(../img/amb
 .ambient .key {
   color: #B9AC9C;
   box-shadow: inset 0 0 0 2px #3A332C;
+}
+
+/* Scenes: light text, a soft shadow, and a faint dark scrim behind each
+   block so it reads over a bright sky as well as dark ground. All painted
+   once; only opacity ever changes. Brainrot mode hides the wallpaper and
+   styles this text itself, so these rules stand aside there. */
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .ambient-text,
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .ambient-controls {
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 30px rgba(0, 0, 0, 0.30);
+}
+
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .ambient-text::before,
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .ambient-controls::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: -160px;
+  right: -160px;
+  top: -120px;
+  bottom: -120px;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.36), rgba(0, 0, 0, 0.18) 55%, rgba(0, 0, 0, 0));
+}
+
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .ambient-controls::before {
+  left: 360px;
+  right: 360px;
+  top: -140px;
+  bottom: -140px;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0));
+}
+
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .clock-ampm,
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .clock-date,
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .ambient-now,
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .ambient-controls-artist,
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .ambient-hint {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .ambient-controls {
+  color: #FFFFFF;
+}
+
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .clock {
+  text-shadow: inherit;
+}
+
+html:not([data-brainrot="on"]) .ambient[data-tone="scene"] .key {
+  color: #FFFFFF;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.6);
 }

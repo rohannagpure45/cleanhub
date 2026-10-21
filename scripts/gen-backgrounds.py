@@ -5,9 +5,8 @@ blurs live. For each theme it writes:
   app/img/bg-<id>-blur.jpg  the same image heavily blurred, used for fake glass
   app/img/thumb-<id>.jpg    240x135 swatch for the settings screen
 
-and the 512x512 app icon (app/icon.png) shown in Samsung's app bar, plus the
-Ambient screen's wallpapers (app/img/ambient-<id>.jpg): almost entirely pure
-black, so a local-dimming TV can switch most of its backlight zones off.
+and the 512x512 app icon (app/icon.png) shown in Samsung's app bar. The
+Ambient screen's wallpapers come from scripts/gen-wallpapers.py.
 
 Everything is procedural (soft colour fields plus fine grain), so there are
 no photo licences to track. Run: python3 scripts/gen-backgrounds.py
@@ -98,52 +97,6 @@ def icon():
     print("icon: wrote app/icon.png")
 
 
-def dark_glow(img_arr, cx, cy, radius, rgb, peak):
-    """Adds a soft radial glow (smoothstep falloff) to a float RGB array."""
-    import numpy as np
-    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
-    d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) / radius
-    t = np.clip(1 - d, 0, 1)
-    w = t * t * (3 - 2 * t) * peak
-    for c in range(3):
-        img_arr[..., c] += w * rgb[c]
-
-
-def ambient():
-    """Lamp: a warm lamp just out of frame, top right, and its faint pool of
-    light below. Midnight: a deep-blue haze at the floor and a few dim stars.
-    Dither only where there is light, so black stays exactly black."""
-    import numpy as np
-    rng = np.random.default_rng(7)
-    walls = {}
-    lamp = np.zeros((H, W, 3), np.float32)
-    dark_glow(lamp, 1760, -40, 760, (255, 170, 95), 0.13)
-    dark_glow(lamp, 1650, 1120, 520, (255, 150, 80), 0.045)
-    walls["lamp"] = lamp
-    mid = np.zeros((H, W, 3), np.float32)
-    yy = np.arange(H, dtype=np.float32)[:, None]
-    haze = np.clip((yy - 720) / 360, 0, 1) ** 2 * 0.05
-    mid[..., 0] += haze * 60
-    mid[..., 1] += haze * 90
-    mid[..., 2] += haze * 160
-    for _ in range(70):
-        x, y = rng.integers(40, W - 40), rng.integers(30, int(H * 0.62))
-        b = rng.uniform(18, 46)
-        r = 1 if rng.random() < 0.8 else 2
-        mid[y - r + 1:y + r, x - r + 1:x + r] += (b * 0.85, b * 0.9, b)
-    walls["midnight"] = mid
-    for name, arr in walls.items():
-        # Triangular dither (±1 level) hides the 8-bit steps of a very dark
-        # gradient, which otherwise show as rings in a dark room.
-        lit = arr.max(axis=2, keepdims=True) > 0.2
-        noise = (rng.uniform(-0.5, 0.5, size=arr.shape) + rng.uniform(-0.5, 0.5, size=arr.shape)).astype(np.float32)
-        arr = np.where(lit, arr + noise, arr)
-        out = Image.fromarray(np.clip(np.rint(arr), 0, 255).astype(np.uint8), "RGB")
-        out.save(OUT / f"ambient-{name}.jpg", quality=90, optimize=True)
-        apl = float(np.clip(arr, 0, 255).mean() / 255 * 100)
-        print(f"ambient-{name}: wrote (average picture level {apl:.2f}%)")
-
-
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for i, (name, (base, blobs, amount)) in enumerate(THEMES.items()):
@@ -155,7 +108,6 @@ def main():
         img.resize((240, 135), Image.LANCZOS).save(OUT / f"thumb-{name}.jpg", quality=85)
         print(f"{name}: wrote bg, blur and thumb")
     icon()
-    ambient()
 
 
 if __name__ == "__main__":

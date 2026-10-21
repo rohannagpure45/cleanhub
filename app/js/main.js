@@ -229,7 +229,18 @@
     state.confirmReset = false;
     renderSettings();
     CH.ui.openSheet(true);
-    CH.ui.warmThemes(CH.options.theme.map(function (t) { return t.id; }));
+    CH.ui.warmImages(settingsImages());
+  }
+
+  // Pictures the Settings sheet can switch to: each theme's background and
+  // swatch, and each wallpaper's swatch.
+  function settingsImages() {
+    const names = [];
+    CH.options.theme.forEach(function (t) {
+      names.push('bg-' + t.id, 'bg-' + t.id + '-blur', 'thumb-' + t.id);
+    });
+    CH.options.wallpaper.forEach(function (w) { names.push('thumb-wall-' + w.id); });
+    return names;
   }
 
   function closeSettings() {
@@ -252,6 +263,7 @@
     if (relayout) renderHome(remembered ? remembered.id : null);
     if (next.music !== prev.music) changeMusic(next.music);
     if (next.input !== prev.input) cancelSwitch();
+    if (next.wallpaper !== prev.wallpaper) CH.ui.showWall(wallNow(), state.screen !== 'ambient');
     // The input list covers every input, so one fetch serves any choice.
     if (next.input !== 'off' && (prev.input === 'off' || !inputs)) prefetchInputs();
   }
@@ -547,6 +559,26 @@
   let moveTimer = null;
   let controlsTimer = null;
 
+  // Rotate shows each scene for a quarter of an hour, in order, on the clock
+  // (so it changes on the quarter hour, and picks up where the clock is after
+  // the TV was off).
+  const ROTATE_MS = 15 * 60 * 1000;
+  const SCENES = CH.options.wallpaper
+    .filter(function (w) { return w.kind === 'scene'; })
+    .map(function (w) { return w.id; });
+
+  // The wallpaper on screen now: the one chosen, or Rotate's current scene.
+  function wallNow() {
+    const id = state.settings.wallpaper;
+    if (id !== 'rotate') return id;
+    return SCENES[Math.floor(CH.platform.now().getTime() / ROTATE_MS) % SCENES.length];
+  }
+
+  function wallLabel(id) {
+    if (id === 'rotate') return 'Rotate · a new scene every 15 minutes';
+    return CH.store.label('wallpaper', id);
+  }
+
   function saveAmbient(open) {
     try {
       const st = CH.player.state();
@@ -617,6 +649,7 @@
   function openAmbient(play) {
     cancelSwitch();
     state.screen = 'ambient';
+    CH.ui.showWall(wallNow(), true);
     CH.ui.openAmbient(true);
     CH.platform.screenSaver(false);
     CH.ui.updateAmbient(CH.player.state(), musicOn());
@@ -657,6 +690,7 @@
     else if (key === 'left' && music) CH.player.previous();
     else if (key === 'up' || key === 'down') {
       changeSettings(CH.store.cycle(state.settings, 'wallpaper', key === 'down' ? 1 : -1));
+      CH.ui.toast(wallLabel(state.settings.wallpaper));
     }
     CH.ui.updateAmbient(CH.player.state(), music);
   }
@@ -723,6 +757,8 @@
     // Runs even with Home's clock off: Ambient always shows its clock.
     const now = CH.platform.now();
     CH.ui.updateClock(now, state.settings.clock);
+    // Rotate's next scene comes in on the quarter hour (or on coming back).
+    if (state.screen === 'ambient') CH.ui.showWall(wallNow(), false);
     // Wake just after the next minute starts.
     clockTimer = root.setTimeout(tick, (60 - now.getSeconds()) * 1000 + 50);
   }

@@ -611,35 +611,152 @@ test('the Ambient clock moves to another corner every few minutes', async () => 
   assert.equal(await spot(), 'spot-br');
 });
 
-test('Ambient is nearly black on screen (low power on a local-dimming TV)', async () => {
-  for (const wall of ['lamp', 'midnight', 'black']) {
+// Average picture level (APL, % of full white) and the share of pure-black
+// pixels in a screenshot of what the TV would show.
+async function screenStats() {
+  const png = await page.screenshot();
+  return page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = 'data:image/png;base64,' + b64;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = 480; c.height = 270;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, 480, 270);
+    const d = ctx.getImageData(0, 0, 480, 270).data;
+    let sum = 0, black = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const y = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+      sum += y;
+      if (y < 2) black++;
+    }
+    return { apl: sum / (d.length / 4) / 255 * 100, black: black / (d.length / 4) * 100 };
+  }, png.toString('base64'));
+}
+
+// The wallpaper id on the front layer.
+const frontWall = () => page.evaluate(() => {
+  const el = document.querySelector('#ambient .ambient-wall.is-front');
+  const m = el && el.className.match(/wall-(\w+)/);
+  return m ? m[1] : null;
+});
+
+test('the dark wallpapers are nearly black on screen (low power on a local-dimming TV)', async () => {
+  for (const wall of ['lamp', 'midnight', 'black']) { // the 'dark' kind in options.js
     await page.clock.install();
     await openAmbient('', S({ wallpaper: wall }));
     await page.clock.runFor(7000); // controls fade away
     await page.waitForTimeout(400);
-    const png = await page.screenshot();
-    const stats = await page.evaluate(async (b64) => {
-      const img = new Image();
-      img.src = 'data:image/png;base64,' + b64;
-      await img.decode();
-      const c = document.createElement('canvas');
-      c.width = 480; c.height = 270;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(img, 0, 0, 480, 270);
-      const d = ctx.getImageData(0, 0, 480, 270).data;
-      let sum = 0, black = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        const y = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
-        sum += y;
-        if (y < 2) black++;
-      }
-      return { apl: sum / (d.length / 4) / 255 * 100, black: black / (d.length / 4) * 100 };
-    }, png.toString('base64'));
+    const stats = await screenStats();
     assert.ok(stats.apl < 2, `${wall}: average picture level ${stats.apl.toFixed(2)}% should be under 2%`);
     assert.ok(stats.black > 70, `${wall}: ${stats.black.toFixed(0)}% of the screen is black`);
     await page.close();
     page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
   }
+});
+
+test('scenes fill the screen in colour, with the clock light and readable over them', async () => {
+  const scenes = ['sunset', 'coast', 'dunes', 'aurora', 'rain', 'deco'];
+  for (const wall of scenes) {
+    await page.clock.install();
+    await openAmbient('', S({ wallpaper: wall }));
+    await page.clock.runFor(7000); // controls fade away
+    await page.waitForTimeout(300);
+    assert.equal(await frontWall(), wall);
+    assert.equal(await page.getAttribute('#ambient', 'data-tone'), 'scene');
+    const look = await page.evaluate(() => {
+      const time = getComputedStyle(document.querySelector('#ambient .clock-time'));
+      const scrim = getComputedStyle(document.querySelector('#ambient .ambient-text'), '::before');
+      return { color: time.color, shadow: time.textShadow, scrim: scrim.backgroundImage };
+    });
+    assert.match(look.color, /^rgba?\(255, 255, 255/, `${wall}: light clock`);
+    assert.notEqual(look.shadow, 'none', `${wall}: the clock has a shadow`);
+    assert.match(look.scrim, /radial-gradient/, `${wall}: a soft scrim sits behind the text`);
+    const stats = await screenStats();
+    assert.ok(stats.apl > 8, `${wall}: average picture level ${stats.apl.toFixed(1)}% (a picture, not black)`);
+    assert.ok(stats.black < 5, `${wall}: ${stats.black.toFixed(1)}% pure black`);
+    assert.deepEqual(errors, [], `${wall}: no errors`);
+    await page.close();
+    page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
+    errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+  }
+});
+
+test('▲ ▼ in Ambient cross-fade to the next wallpaper and name it', async () => {
+  await page.clock.install();
+  await openAmbient('', S({ wallpaper: 'black' }));
+  assert.equal(await frontWall(), 'black');
+  assert.equal(await page.getAttribute('#ambient', 'data-tone'), 'dark');
+  await page.clock.runFor(7000); // controls fade away
+  await press('ArrowDown'); // so this first key only wakes them
+  assert.equal(await frontWall(), 'black');
+  await press('ArrowDown');
+  assert.equal(await toastText(), 'Sunset');
+  await page.waitForFunction(() => /wall-sunset/.test(document.querySelector('#ambient .ambient-wall.is-front').className));
+  assert.equal(await page.getAttribute('#ambient', 'data-tone'), 'scene');
+  // Black stays underneath while Sunset fades in, then steps away.
+  assert.equal(await page.$$eval('#ambient .ambient-wall.is-under.wall-black', (els) => els.length), 1);
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('#ambient .ambient-wall.is-front')).opacity === '1');
+  await page.waitForFunction(() => !document.querySelector('#ambient .ambient-wall.is-under'));
+  assert.equal(await page.$$eval('#ambient .ambient-wall.is-front', (els) => els.length), 1);
+  await press('ArrowUp');
+  assert.equal(await toastText(), 'Black');
+  await page.waitForFunction(() => document.querySelector('#ambient').getAttribute('data-tone') === 'dark');
+  assert.equal(await frontWall(), 'black');
+  await press('ArrowUp', 3); // Midnight, Lamp, then round to Rotate
+  assert.match(await toastText(), /^Rotate/);
+  assert.equal((await state()).settings.wallpaper, 'rotate', 'saved');
+  assert.deepEqual(errors, []);
+});
+
+test('over Ambient the wallpaper name shows at the bottom, clear of the controls, in either layout', async () => {
+  for (const layout of ['list', 'dock']) {
+    await openAmbient('', S({ layout, wallpaper: 'lamp' }));
+    await press('ArrowDown'); // the controls are up on entry, so this acts
+    assert.equal(await toastText(), 'Midnight');
+    const box = (sel) => page.$eval(sel, (e) => { const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; });
+    const toast = await box('#toast span');
+    const controls = await box('#ambient .ambient-controls');
+    assert.ok(toast.top > controls.bottom, `${layout}: toast (${toast.top}) below the controls (${controls.bottom})`);
+    assert.ok(toast.bottom <= 1080 - 40, `${layout}: on screen`);
+    await page.close();
+    page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
+  }
+});
+
+test('Rotate shows each scene for a quarter of an hour, changing on the clock', async () => {
+  await page.clock.install({ time: new Date('2026-10-20T20:00:00') });
+  await openAmbient('', S({ wallpaper: 'rotate' }));
+  const scenes = await page.evaluate(() => window.CleanHub.options.wallpaper.filter((w) => w.kind === 'scene').map((w) => w.id));
+  const first = await frontWall();
+  assert.ok(scenes.includes(first), `starts on a scene (${first})`);
+  await page.clock.runFor(14 * 60 * 1000);
+  assert.equal(await frontWall(), first, 'the same scene 14 minutes in');
+  await page.clock.runFor(62 * 1000);
+  const next = scenes[(scenes.indexOf(first) + 1) % scenes.length];
+  await page.waitForFunction((id) => document.querySelector('#ambient .ambient-wall.is-front').className.includes('wall-' + id), next);
+  assert.equal((await state()).settings.wallpaper, 'rotate', 'the setting stays Rotate');
+  // Back to Home and in again later: Rotate picks up the scene for the time.
+  await press('Escape');
+  await page.clock.runFor(15 * 60 * 1000);
+  await press('Enter');
+  assert.equal(await frontWall(), scenes[(scenes.indexOf(first) + 2) % scenes.length]);
+  assert.deepEqual(errors, []);
+});
+
+test('the wallpaper row in Settings shows a swatch of the wallpaper', async () => {
+  await open('', { settings: S({ wallpaper: 'deco' }) });
+  await openSettings();
+  const swatch = () => page.$eval('#sheet [data-option="wallpaper"] .swatch', (e) => e.style.backgroundImage);
+  assert.match(await swatch(), /thumb-wall-deco\.jpg/);
+  const rows = await sheetLabels();
+  await press('ArrowDown', rows.indexOf('Ambient wallpaper'));
+  await press('ArrowRight');
+  assert.match(await swatch(), /thumb-wall-rotate\.jpg/);
+  assert.equal(await page.$eval('#sheet [data-option="wallpaper"] .sheet-value-text', (e) => e.textContent), 'Rotate');
+  assert.equal((await state()).settings.wallpaper, 'rotate');
+  assert.equal(await page.evaluate(() => fetch('img/thumb-wall-rotate.jpg').then((r) => r.status)), 200);
 });
 
 test('Settings can hide Ambient from Home or turn its music off', async () => {

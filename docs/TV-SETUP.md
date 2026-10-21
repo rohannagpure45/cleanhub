@@ -83,12 +83,17 @@ about 0.3 s.
 
 ## Ambient: leaving it on all day
 
-Ambient is first on Home. It shows a near-black wallpaper (Lamp, Midnight or
-Black) with a small dim clock that moves corners every 4 minutes, and plays
-the bundled jazz on a loop. Keys: the first press only shows the controls,
+Ambient is first on Home. It shows a wallpaper with a small clock that moves
+corners every 4 minutes, and plays the bundled jazz on a loop. Keys: the first press only shows the controls,
 then OK pauses or plays, ◀ ▶ change track, ▲ ▼ change wallpaper, and Back goes
 Home. If the TV is switched off while Ambient is showing, Clean Hub reopens
 it the next time it starts.
+
+Wallpapers (▲ ▼ in Ambient, or Settings → Ambient wallpaper):
+- **Lamp**, **Midnight** and **Black** are near-black, for low power.
+- **Sunset**, **Coast**, **Dunes**, **Aurora**, **City Rain** and **Deco** are
+  full-colour scenes, with a light clock.
+- **Rotate** shows the scenes in turn, a new one every quarter hour.
 
 The TV has timers that would end an all-day session. No app can override
 them, so set them once:
@@ -102,8 +107,10 @@ them, so set them once:
 | General & Privacy → Start Screen Options → **Autorun Last App** | On (optional) | After power-on, Clean Hub comes back, and with it Ambient. |
 
 **Using less power.** On this mini-LED TV the backlight is most of the power
-draw. Ambient is under 2% average brightness, so local dimming can turn most
-zones off.
+draw. The dark wallpapers are under 2% average brightness, so local dimming
+can turn most zones off. The scenes run from about 13% (Deco) to 70% (Dunes),
+so they draw roughly what ordinary TV does; that's fine for this panel, which
+is LCD and can't burn in.
 - Picture → Expert Settings → **Local Dimming: High**, and a lower
   **Brightness**, help most. So does leaving Power and Energy Saving →
   **Brightness Optimization** on.

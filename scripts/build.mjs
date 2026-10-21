@@ -4,6 +4,7 @@
 import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
@@ -13,6 +14,24 @@ export function manifest() {
   const version = xml.match(/<widget[^>]*\sversion="([^"]+)"/);
   if (!app || !version) throw new Error('config.xml: missing tizen:application or widget version');
   return { appId: app[1], packageId: app[2], requiredVersion: app[3], version: version[1] };
+}
+
+// Every Ambient wallpaper needs its Settings swatch and, unless it is Black
+// or Rotate, its picture and the CSS rule that shows it.
+export function wallpaperProblems() {
+  const ctx = {};
+  vm.runInNewContext(readFileSync(ROOT + 'app/js/options.js', 'utf8'), ctx);
+  const css = readFileSync(ROOT + 'app/css/app.css', 'utf8');
+  const out = [];
+  for (const w of ctx.CleanHub.options.wallpaper) {
+    if (!existsSync(ROOT + `app/img/thumb-wall-${w.id}.jpg`)) out.push(`wallpaper ${w.id}: app/img/thumb-wall-${w.id}.jpg is missing (run npm run wallpapers)`);
+    if (w.kind === 'rotate' || w.id === 'black') continue;
+    if (!existsSync(ROOT + `app/img/ambient-${w.id}.jpg`)) out.push(`wallpaper ${w.id}: app/img/ambient-${w.id}.jpg is missing (run npm run wallpapers)`);
+    if (!css.includes(`.ambient-wall.wall-${w.id} { background-image: url(../img/ambient-${w.id}.jpg); }`)) {
+      out.push(`wallpaper ${w.id}: app.css has no .ambient-wall.wall-${w.id} rule`);
+    }
+  }
+  return out;
 }
 
 export function problems() {
@@ -34,6 +53,7 @@ export function problems() {
   const icons = Object.keys(JSON.parse(readFileSync(ROOT + 'scripts/app-icons.json', 'utf8'))).filter((k) => k[0] !== '_');
   const noIcon = icons.filter((k) => !existsSync(ROOT + 'app/img/apps/' + k + '.png'));
   if (noIcon.length) out.push(`app icons missing for ${noIcon.join(', ')} (run python3 scripts/fetch-icons.py)`);
+  out.push(...wallpaperProblems());
   return out;
 }
 

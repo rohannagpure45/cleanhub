@@ -56,3 +56,14 @@ test('label names an option and falls back to the id', () => {
   assert.equal(CH.store.label('font', 'grotesk'), 'Space Grotesk');
   assert.equal(CH.store.label('font', 'mystery'), 'mystery');
 });
+
+test('wallpapers: the dark ones first, then the scenes, then Rotate; every choice survives a reload', () => {
+  const walls = CH.options.wallpaper;
+  const kinds = walls.map((w) => w.kind);
+  assert.deepEqual(plain(kinds.slice(0, 3)), ['dark', 'dark', 'dark']);
+  assert.ok(kinds.filter((k) => k === 'scene').length >= 6, 'six scenes');
+  assert.equal(kinds[kinds.length - 1], 'rotate');
+  for (const w of walls) assert.equal(CH.store.sanitize({ wallpaper: w.id }).wallpaper, w.id);
+  assert.equal(CH.store.sanitize({ wallpaper: 'beach' }).wallpaper, 'lamp', 'unknown falls back to the default');
+  assert.equal(CH.store.cycle(CH.store.sanitize({ wallpaper: 'lamp' }), 'wallpaper', -1).wallpaper, 'rotate', 'wraps');
+});
