@@ -1,5 +1,5 @@
 // Every choice the settings screen offers. CSS keys off the ids
-// (data-theme, data-font, data-layout, data-focus, data-icons on <html>).
+// (data-theme, data-font, data-layout, data-focus, data-icons, data-brainrot on <html>).
 (function (root) {
   'use strict';
   const CH = root.CleanHub = root.CleanHub || {};
@@ -64,6 +64,10 @@
       { id: 'hdmi2', name: 'HDMI 2' },
       { id: 'hdmi3', name: 'HDMI 3' },
       { id: 'hdmi4', name: 'HDMI 4' }
+    ],
+    brainrot: [
+      { id: 'off', name: 'Off' },
+      { id: 'on', name: 'On' }
     ]
   };
 
@@ -81,6 +85,7 @@
     { id: 'wallpaper', label: 'Ambient wallpaper' },
     { id: 'music', label: 'Ambient music' },
     { id: 'input', label: 'Fire TV on Home' },
-    { id: 'reset', kind: 'action', label: 'Reset to defaults' }
+    { id: 'reset', kind: 'action', label: 'Reset to defaults' },
+    { id: 'brainrot', label: 'Brainrot mode' } // Ambient becomes a TikTok-style feed
   ];
 })(typeof window !== 'undefined' ? window : globalThis);

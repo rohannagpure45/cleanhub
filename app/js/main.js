@@ -261,7 +261,7 @@
     save();
     CH.ui.applyLook(next);
     if (relayout) renderHome(remembered ? remembered.id : null);
-    if (next.music !== prev.music) changeMusic(next.music);
+    if (next.music !== prev.music || next.brainrot !== prev.brainrot) changeMusic();
     if (next.input !== prev.input) cancelSwitch();
     if (next.wallpaper !== prev.wallpaper) CH.ui.showWall(wallNow(), state.screen !== 'ambient');
     // The input list covers every input, so one fetch serves any choice.
@@ -610,18 +610,44 @@
     });
   }
 
-  // A new Music choice: a new playlist, from its start; playing on if Ambient is up.
-  function changeMusic(music) {
+  function brainrotOn() {
+    return state.settings.brainrot === 'on';
+  }
+
+  // What Ambient plays: in Brainrot mode its own set (nothing with Music off),
+  // otherwise the Music setting's tracks, never the brainrot set.
+  function ambientTracks() {
+    const list = CH.playlist || [];
+    if (brainrotOn()) {
+      return musicOn() ? list.filter(function (t) { return t.set === 'brainrot'; }) : [];
+    }
+    return tracksFor(state.settings.music).filter(function (t) { return t.set !== 'brainrot'; });
+  }
+
+  // A new Music choice or Brainrot mode: a new playlist, from its start;
+  // playing on if Ambient is up.
+  function changeMusic() {
     const wasPlaying = CH.player.state().wanted;
     CH.player.pause();
-    CH.player.init(tracksFor(music), 0, onPlayer);
-    if (state.screen === 'ambient' && music !== 'off' && wasPlaying) CH.player.play();
-    if (state.screen === 'ambient') CH.ui.updateAmbient(CH.player.state(), music !== 'off');
+    CH.player.init(ambientTracks(), 0, onPlayer);
+    if (state.screen === 'ambient' && musicOn() && wasPlaying) CH.player.play();
+    if (state.screen === 'ambient') updateAmbient();
+  }
+
+  // Ambient's text, and in Brainrot mode the feed's sound line and hint.
+  function updateAmbient() {
+    const st = CH.player.state();
+    const rot = brainrotOn();
+    if (rot) {
+      const t = musicOn() && st.count && !st.broken ? st.track : null;
+      CH.reel.setSound(t ? t.title + ' · ' + t.artist : null, musicOn() && !!st.count);
+    }
+    CH.ui.updateAmbient(st, musicOn(), rot ? CH.reel.state() : null);
   }
 
   function onPlayer() {
     if (state.screen === 'ambient') {
-      CH.ui.updateAmbient(CH.player.state(), musicOn());
+      updateAmbient();
       saveAmbient(true);
     }
   }
@@ -652,7 +678,8 @@
     CH.ui.showWall(wallNow(), true);
     CH.ui.openAmbient(true);
     CH.platform.screenSaver(false);
-    CH.ui.updateAmbient(CH.player.state(), musicOn());
+    if (brainrotOn()) CH.reel.start(play === false);
+    updateAmbient();
     if (musicOn() && play !== false) CH.player.play();
     saveAmbient(true);
     tick();
@@ -667,6 +694,7 @@
     state.controlsShown = false;
     CH.ui.showAmbientControls(false);
     CH.player.pause();
+    CH.reel.stop();
     CH.ui.openAmbient(false);
     CH.platform.screenSaver(true);
     saveAmbient(false);
@@ -677,6 +705,10 @@
   function onAmbientKey(key) {
     if (key === 'back') {
       closeAmbient();
+      return;
+    }
+    if (brainrotOn()) {
+      onBrainrotKey(key);
       return;
     }
     const wasShown = state.controlsShown;
@@ -693,6 +725,31 @@
       CH.ui.toast(wallLabel(state.settings.wallpaper));
     }
     CH.ui.updateAmbient(CH.player.state(), music);
+  }
+
+  // Brainrot mode: the feed is anything but hidden, so keys act at once.
+  // OK pauses the feed and its music together; ▲▼ scroll like a phone.
+  function onBrainrotKey(key) {
+    const music = musicOn();
+    showControls();
+    if (key === 'ok') {
+      if (music && CH.player.state().blocked) {
+        CH.player.play(); // 'Press OK to play'
+      } else {
+        const pause = !CH.reel.state().paused;
+        CH.reel.setPaused(pause);
+        if (music && pause) CH.player.pause();
+        else if (music) CH.player.play();
+      }
+    } else if (key === 'up' || key === 'down') {
+      CH.reel.step(key === 'down' ? 1 : -1); // a new video plays, even after a pause
+      if (music && !CH.player.state().wanted) CH.player.play();
+    } else if (key === 'right' && music) {
+      CH.player.next();
+    } else if (key === 'left' && music) {
+      CH.player.previous();
+    }
+    updateAmbient();
   }
 
   // ---- Data ------------------------------------------------------------------
@@ -803,6 +860,7 @@
     if (doc.hidden) {
       cancelSwitch();
       CH.player.suspend();
+      CH.reel.suspend();
       if (state.screen === 'ambient') CH.platform.screenSaver(true);
       return;
     }
@@ -812,6 +870,7 @@
     if (state.screen === 'ambient') {
       CH.platform.screenSaver(false);
       CH.player.resume();
+      CH.reel.resume();
       scheduleMove();
     }
   }
@@ -820,6 +879,7 @@
     const s = storage();
     state.settings = s ? CH.store.load(s) : CH.store.defaults();
     CH.ui.init();
+    CH.reel.init(doc.getElementById('ambient'));
     CH.ui.applyLook(state.settings);
     const cached = s ? readCache() : null;
     if (cached) {
@@ -829,7 +889,7 @@
     }
     renderHome(null);
     const ambient = s ? readAmbient() : {};
-    CH.player.init(tracksFor(state.settings.music), ambient.track, onPlayer);
+    CH.player.init(ambientTracks(), ambient.track, onPlayer);
     // Left on Ambient (e.g. the TV went off with it showing): come back to it.
     if (ambient.open && state.settings.ambient === 'on') openAmbient(!ambient.paused);
     doc.addEventListener('keydown', onKey);

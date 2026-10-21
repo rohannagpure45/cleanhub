@@ -26,6 +26,11 @@ exactly as they are.
   full-colour scenes (Sunset, Coast, Dunes, Aurora, City Rain, Deco); Rotate
   shows a new scene every 15 minutes. ▲▼ in Ambient change it, with a
   cross-fade.
+- **Brainrot mode.** The last row of Settings turns Ambient into a TikTok-style
+  feed: split-screen stories over an endless runner, a ball escaping rings,
+  aura ratings, Italian brainrot and the logo that might hit the corner, with
+  word-by-word captions, a live comment section and its own phonk. ▲▼ scroll,
+  OK pauses, ◀▶ change the sound, Back goes Home.
 - **Fire TV on Home.** One press switches the TV to the Fire Stick's HDMI
   input, full screen, in about 0.3 s.
 - **Settings is the button top right.** Press ▶ from the list, or ▲ from the
@@ -124,6 +129,7 @@ app/                the .wgt contents that ship to the TV
   js/               catalog, options, store, apps, focus: pure logic
                     platform.js: the only file that calls `tizen`
                     ui.js: DOM; main.js: state and remote keys
+                    brainrot.js: the feed's words; reel.js: its canvas scenes and sounds
   img/              backgrounds (generated); apps/: app icons (fetched)
   fonts/            Manrope, Fraunces, Space Grotesk (SIL OFL 1.1)
 scripts/            build.mjs, tv.py (sign/install), asset generation, compatibility check
@@ -165,6 +171,20 @@ hiss, levels them, and encodes them to mono AAC in `app/music/vintage/`.
 | Down Hearted Blues | Bessie Smith | 1923 | [source](https://www.loc.gov/item/jukebox-670189/) |
 | Muscle Shoals Blues | Fletcher Henderson's Orchestra | 1924 | [source](https://www.loc.gov/item/jukebox-673894/) |
 | Copenhagen | The Wolverines with Bix Beiderbecke | 1924 | [source](https://commons.wikimedia.org/wiki/File:BixBeiderbecke-Copenhagen.ogg) |
+
+### Brainrot mode
+
+Nothing in the feed is a video file or comes from the internet. Each video is
+drawn live on a canvas (`app/js/reel.js`) at up to 30 fps, and its story, captions,
+handles, counts and comments are put together from word lists in
+`app/js/brainrot.js`, so the feed never runs out. Emoji are small drawings,
+since the TV may have no emoji font. The runner, the characters and the
+sounds are all original; the hits, bounce notes and dings are synthesised with
+Web Audio. The soundtrack is three original loops in `app/music/brainrot/`
+(*Sigma Drift*, drift phonk with a cowbell lead; *Ohio Funk*, Brazilian funk;
+*Aura Bounce*, hyperpop), composed and rendered by
+`python3 scripts/gen-brainrot.py`. Music *Off* makes the feed silent, and the
+brainrot set never plays outside Brainrot mode.
 
 ## Licence
 

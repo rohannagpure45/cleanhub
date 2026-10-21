@@ -19,6 +19,7 @@
     wallpaper: 'lamp',
     music: 'all',
     input: 'off', // which HDMI input the Home 'Fire TV' item switches to
+    brainrot: 'off', // Ambient shows the brainrot feed instead of the wallpaper
     apps: null // null = not chosen yet; the home screen picks recognised apps
   };
 

@@ -53,6 +53,7 @@
     html.setAttribute('data-icons', settings.icons);
     html.setAttribute('data-clock', settings.clock);
     html.setAttribute('data-wallpaper', settings.wallpaper);
+    html.setAttribute('data-brainrot', settings.brainrot);
   }
 
   // Lines the pre-blurred background up with a panel, so the panel reads as
@@ -709,8 +710,9 @@
     else decodeWall(id, place);
   }
 
-  // st: CH.player.state(); musicOn: the Ambient music setting.
-  function updateAmbient(st, musicOn) {
+  // st: CH.player.state(); musicOn: the Ambient music setting; reel:
+  // CH.reel.state() in Brainrot mode, else null.
+  function updateAmbient(st, musicOn, reel) {
     const t = st.track;
     let status = '';
     if (!musicOn) status = 'Music off';
@@ -720,11 +722,16 @@
     else if (!st.playing) status = 'Paused';
     amb.title.textContent = musicOn && t ? t.title : '';
     amb.status.textContent = status;
-    amb.controlsTitle.textContent = musicOn && t ? t.title : 'Ambient';
+    amb.controlsTitle.textContent = musicOn && t ? t.title : (reel ? 'Brainrot mode' : 'Ambient');
     amb.controlsArtist.textContent = musicOn && t ? [t.artist, t.year].filter(Boolean).join(' · ') : status;
-    const keys = musicOn && st.count
+    let keys = musicOn && st.count
       ? [['OK', st.playing ? 'Pause' : 'Play'], ['◀ ▶', 'Track'], ['▲ ▼', 'Wallpaper'], ['Back', 'Home']]
       : [['▲ ▼', 'Wallpaper'], ['Back', 'Home']];
+    if (reel) {
+      keys = [['OK', reel.paused || (musicOn && st.blocked) ? 'Play' : 'Pause'], ['▲ ▼', 'Scroll']];
+      if (musicOn && st.count) keys.push(['◀ ▶', 'Sound']);
+      keys.push(['Back', 'Home']);
+    }
     fillHint(amb.hint, keys);
   }
 
