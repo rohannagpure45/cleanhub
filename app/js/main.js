@@ -57,6 +57,22 @@
     fg: '#FF9900'
   };
 
+  // Apps on the Fire TV Stick (js/firetv-apps.js), each after Fire TV on Home:
+  // OK switches to the Fire TV input as INPUT does, and has the stick open
+  // the app.
+  const FIRE_APPS = (CH.fireTvApps || []).map(function (a) {
+    return {
+      id: 'cleanhub:firetv:' + a.package,
+      name: a.name,
+      key: 'firetv',
+      builtin: 'firetv',
+      package: a.package,
+      mono: a.name.charAt(0).toUpperCase(),
+      bg: INPUT.bg,
+      fg: INPUT.fg
+    };
+  });
+
   function storage() {
     try {
       return root.localStorage;
@@ -100,12 +116,11 @@
     return state.home.map(function (e) { return e.id; });
   }
 
-  // What Home shows: Ambient, then the apps.
-  // What Home shows: Ambient, the Fire TV input, then the apps.
+  // What Home shows: Ambient, the Fire TV input and its apps, then the apps.
   function homeItems() {
-    const builtins = [];
+    let builtins = [];
     if (state.settings.ambient === 'on') builtins.push(AMBIENT);
-    if (state.settings.input !== 'off') builtins.push(INPUT);
+    if (state.settings.input !== 'off') builtins = builtins.concat([INPUT], FIRE_APPS);
     return builtins.concat(state.home);
   }
 
@@ -174,7 +189,7 @@
       const item = homeItems()[state.homeIndex];
       if (onGear()) openSettings();
       else if (item && item.builtin === 'ambient') openAmbient();
-      else if (item && item.builtin === 'input') showInput();
+      else if (item && (item.builtin === 'input' || item.builtin === 'firetv')) showInput(item);
       else launch(item);
       return;
     }
@@ -507,6 +522,7 @@
   // One switch at a time; it's dropped if the viewer moves on meanwhile.
   let switchId = 0;
   let switching = 0;
+  let switchItem = INPUT; // the Home item that asked: Fire TV, or one of its apps
 
   function cancelSwitch() {
     switching = 0;
@@ -514,17 +530,20 @@
 
   function stillWanted(id) {
     return switching === id && !doc.hidden && state.screen === 'home' &&
-      state.settings.input !== 'off' && focusedHomeId() === INPUT.id;
+      state.settings.input !== 'off' && focusedHomeId() === switchItem.id;
   }
 
   // Points the TV at the chosen HDMI input, then hands the screen to the TV
   // viewer so the picture and the remote belong to the device there (the TV
   // shows its own 'No signal' if nothing is plugged in). Clean Hub stays
-  // running in the background.
-  function showInput() {
+  // running in the background. For a Fire TV app, the stick is asked to open
+  // it just before Clean Hub steps aside (its timers stop once hidden).
+  function showInput(item) {
     if (switching) return; // a second OK while one is under way does nothing
     const id = ++switchId;
     switching = id;
+    switchItem = item || INPUT;
+    const app = switchItem.package ? switchItem : null;
     const done = function () {
       if (switching === id) switching = 0;
     };
@@ -542,6 +561,7 @@
       return CH.platform.setSource(source).then(function () {
         if (!stillWanted(id)) return null;
         CH.ui.clearToast();
+        if (app) openOnFireTv(app);
         return CH.platform.launch(TV_VIEWER).catch(function () {
           if (stillWanted(id)) CH.platform.hide();
         });
@@ -549,6 +569,53 @@
     }).catch(function () {
       if (switching === id) CH.ui.toast('Couldn’t switch to ' + label);
     }).then(done, done);
+  }
+
+  // ---- Fire TV apps -------------------------------------------------------------
+
+  // The stick's answer usually arrives with the TV viewer in front, so a
+  // failure waits to be told until Clean Hub is back, if that's soon enough
+  // to still make sense.
+  const FIRETV_NOTE_MS = 2 * 60 * 1000;
+  let fireTvNote = null; // { text, at }
+
+  function fireTvSay(text) {
+    if (doc.hidden) {
+      fireTvNote = { text: text, at: Date.now() };
+      return;
+    }
+    fireTvNote = null;
+    CH.ui.toast(text);
+  }
+
+  function showFireTvNote() {
+    const note = fireTvNote;
+    fireTvNote = null;
+    if (note && Date.now() - note.at < FIRETV_NOTE_MS) CH.ui.toast(note.text);
+  }
+
+  // The service wakes the stick and keeps asking for up to 30 s, so it can
+  // be asleep when the TV switches to it.
+  function openOnFireTv(item) {
+    fireTvNote = null;
+    CH.platform.openOnFireTv(item.package).catch(function () {
+      fireTvSay('Couldn’t ask the Fire TV to open ' + item.name);
+    });
+  }
+
+  function onFireTvResult(result) {
+    if (!result) return;
+    if (result.state === 'opened') {
+      fireTvNote = null;
+      return;
+    }
+    let name = 'the app';
+    FIRE_APPS.forEach(function (a) {
+      if (a.package === result.package) name = a.name;
+    });
+    fireTvSay(result.state === 'unpaired'
+      ? 'The Fire TV isn’t paired with Clean Hub (tv.py firetv pair)'
+      : 'Couldn’t reach the Fire TV to open ' + name);
   }
 
   // ---- Ambient ----------------------------------------------------------------
@@ -867,6 +934,7 @@
     tick();
     refreshApps();
     prefetchInputs();
+    showFireTvNote();
     if (state.screen === 'ambient') {
       CH.platform.screenSaver(false);
       CH.player.resume();
@@ -896,6 +964,7 @@
     doc.addEventListener('keyup', onKeyUp);
     doc.addEventListener('visibilitychange', onVisibility);
     root.addEventListener('blur', clearHeld);
+    if (FIRE_APPS.length) CH.platform.onFireTv(onFireTvResult);
     // Let the first frame and key presses through before the slow app list.
     root.setTimeout(function () {
       refreshApps();

@@ -8,6 +8,8 @@ Developer Mode, from this Mac. Standard library only.
   python3 scripts/tv.py install --tv 192.168.1.50      # build, sign, install, open
   python3 scripts/tv.py open | uninstall | ids         # (remembers the last --tv)
   python3 scripts/tv.py debug                          # relaunch for scripts/tv-inspect.mjs
+  python3 scripts/tv.py firetv pair                    # once: pair with the Fire TV Stick
+  python3 scripts/tv.py firetv add StbEmu com.mvas.stb.emu.pro   # a Fire TV app on Home
 
 Signing: 2022 TVs (Tizen 6.5) accept a plain Tizen developer certificate paired
 with the SDK's "old" public distributor certificate, so no Samsung account is
@@ -29,9 +31,11 @@ import secrets
 import select
 import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -52,6 +56,16 @@ DIST_PASSWORD = "tizenpkcs12passfordsigner"
 SDB_PORT = 26101
 WGT = ROOT / "dist" / "CleanHub.wgt"
 BACKUP = STATE / "author.p12"
+
+# The Fire TV Stick's remote-control API (the one Amazon's Fire TV phone app
+# uses): HTTPS on 8080 behind Amazon's private certificate, started on demand
+# through the stick's DIAL server on 8009. The key is the app's fixed one;
+# the client token comes from pairing with a PIN the stick shows on screen.
+FIRETV_JSON = "firetv.json"
+FIRETV_API_KEY = "0987654321"
+FIRETV_API_PORT = 8080
+FIRETV_DIAL_PORT = 8009
+FIRETV_PACKAGE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$")
 
 # Install failures the TV reports, as it prints them (spaces removed), and
 # what they mean here. Bracketed, so timings like "[1163]ms" never match.
@@ -423,6 +437,9 @@ def cmd_package(args, quiet=False):
     if code != 0:
         fail("Build failed:\n" + out)
     app_dir = ROOT / "dist" / "app"
+    apps = write_firetv(app_dir, load_json(FIRETV_JSON))
+    if apps and not quiet:
+        say(f"  Fire TV apps on Home: {', '.join(a['name'] for a in apps)}")
     before = {p: p.stat().st_mtime for p in (ROOT / "dist").glob("*.wgt")}
     code, out = run_pty([TIZEN, "package", "-t", "wgt", "-s", sign["profile"], "-o", ROOT / "dist", "--", app_dir],
                         package_answers(sign["password"]), secrets_to_hide=[sign["password"]])
@@ -653,6 +670,199 @@ def cmd_ids(args):
          "shows the same list on the TV itself.")
 
 
+# ---- Fire TV -------------------------------------------------------------------
+
+def firetv_api(host, path, body=None, token=None, timeout=10, method="POST"):
+    """Calls the stick's API; returns (status, parsed JSON or text)."""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE  # Amazon's private certificate; only ever this stick
+    headers = {"x-api-key": FIRETV_API_KEY, "Content-Type": "application/json; charset=utf-8"}
+    if token:
+        headers["x-client-token"] = token
+    data = json.dumps(body).encode() if body is not None else (b"" if method == "POST" else None)
+    req = urllib.request.Request(f"https://{host}:{FIRETV_API_PORT}{path}", data=data, method=method,
+                                 headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+            status, text = r.status, r.read().decode(errors="replace")
+    except urllib.error.HTTPError as e:
+        status, text = e.code, e.read().decode(errors="replace")
+    try:
+        return status, json.loads(text)
+    except ValueError:
+        return status, text
+
+
+def firetv_is_stick(host, timeout=3):
+    """True if `host` runs a DIAL server that knows Amazon's remote-control app."""
+    try:
+        with urllib.request.urlopen(f"http://{host}:{FIRETV_DIAL_PORT}/apps/FireTVRemote", timeout=timeout) as r:
+            return r.status == 200
+    except (OSError, urllib.error.HTTPError):
+        return False
+
+
+def firetv_wake(host, wait=15):
+    """Starts the stick's remote-control server (it sleeps until asked) and
+    waits until it answers. False if it never does."""
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        try:
+            urllib.request.urlopen(urllib.request.Request(
+                f"http://{host}:{FIRETV_DIAL_PORT}/apps/FireTVRemote", data=b"", method="POST"), timeout=3).close()
+        except (OSError, urllib.error.HTTPError):
+            pass
+        try:
+            # Any answer will do; without a token it's 403.
+            status, _ = firetv_api(host, "/v1/FireTV", timeout=4, method="GET")
+            if status:
+                return True
+        except OSError:
+            pass
+        time.sleep(1)
+    return False
+
+
+def firetv_discover(timeout=3):
+    """Fire TV sticks on this network: DIAL devices (SSDP search) that know
+    Amazon's remote-control app."""
+    search = ("M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\n"
+              "MX: 1\r\nST: urn:dial-multiscreen-org:service:dial:1\r\n\r\n").encode()
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(0.5)
+    seen = []
+    try:
+        s.sendto(search, ("239.255.255.250", 1900))
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                _, (addr, _) = s.recvfrom(4096)
+            except socket.timeout:
+                continue
+            if addr not in seen:
+                seen.append(addr)
+    finally:
+        s.close()
+    return [a for a in seen if firetv_is_stick(a)]
+
+
+def firetv_find(args, config):
+    """The stick's address: --firetv, else the saved one if it still answers,
+    else the only stick on the network."""
+    if args.firetv:
+        if not re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", args.firetv):
+            fail(f"'{args.firetv}' doesn't look like an IPv4 address.")
+        return args.firetv
+    if config.get("host") and firetv_is_stick(config["host"]):
+        return config["host"]
+    say("Looking for the Fire TV Stick on the network …")
+    found = firetv_discover()
+    if not found:
+        fail("No Fire TV Stick answered. Is it on (switch the TV to it and press a button on its remote), "
+             "on the same network as this Mac? Or pass --firetv <its IP> (Fire TV: Settings → My Fire TV → "
+             "About → Network).")
+    if len(found) > 1:
+        fail(f"Found more than one Fire TV ({', '.join(found)}); pass --firetv <IP> to pick one.")
+    return found[0]
+
+
+def write_firetv(app_dir, config):
+    """Puts the pairing and the Fire TV apps into a build (dist/app), never
+    into app/. Unpaired, Home shows no Fire TV apps. Returns the apps."""
+    paired = bool(config.get("token") and config.get("host"))
+    apps = (config.get("apps") or []) if paired else []
+    pairing = Path(app_dir) / "service" / "config.json"
+    if apps:
+        fd = os.open(pairing, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump({"host": config["host"], "token": config["token"]}, f)
+    elif pairing.exists():
+        pairing.unlink()
+    listed = json.dumps([{"name": a["name"], "package": a["package"]} for a in apps], indent=2, ensure_ascii=False)
+    (Path(app_dir) / "js" / "firetv-apps.js").write_text(
+        "// Written by scripts/tv.py from ~/.cleanhub/firetv.json.\n"
+        "(function (root) {\n  'use strict';\n  const CH = root.CleanHub = root.CleanHub || {};\n"
+        f"  CH.fireTvApps = {listed};\n}})(typeof window !== 'undefined' ? window : globalThis);\n")
+    return apps
+
+
+def firetv_pair(args, config):
+    host = firetv_find(args, config)
+    say(f"Waking the Fire TV Stick at {host} …")
+    if not firetv_wake(host):
+        fail("The stick's remote-control service didn't answer. Switch the TV to the Fire TV, press a button "
+             "on its remote, and try again; if it still won't, restart the stick (hold Select + Play/Pause).")
+    status, answer = firetv_api(host, "/v1/FireTV/pin/display", body={"friendlyName": "Clean Hub"})
+    if status != 200:
+        fail(f"The stick wouldn't show a PIN (HTTP {status}: {answer}).")
+    pin = input("Switch the TV to the Fire TV: it shows a 4-digit PIN. Type it here: ").strip()
+    status, answer = firetv_api(host, "/v1/FireTV/pin/verify", body={"pin": pin})
+    token = answer.get("description") if isinstance(answer, dict) else None
+    if status != 200 or not token:
+        fail(f"The stick didn't accept PIN {pin} (HTTP {status}: {answer}). Run pair again for a new PIN.")
+    config.update(host=host, token=token, paired=time.strftime("%Y-%m-%d"))
+    save_json(FIRETV_JSON, config, private=True)
+    say(f"✓ Paired with the Fire TV Stick at {host}.")
+    if not config.get("apps"):
+        say("  Next: python3 scripts/tv.py firetv add <Name> <package>, then tv.py install.")
+
+
+def firetv_add(args, config):
+    if not FIRETV_PACKAGE.fullmatch(args.package):
+        fail(f"'{args.package}' isn't an Android package name (like com.mvas.stb.emu.pro).")
+    name = args.name.strip()
+    if not name:
+        fail("Give the app a name for Home.")
+    apps = [a for a in config.get("apps", []) if a["package"] != args.package]
+    apps.append({"name": name, "package": args.package})
+    config["apps"] = apps
+    save_json(FIRETV_JSON, config, private=True)
+    say(f"✓ {name} ({args.package}) will be on Home after Fire TV. Install to see it: tv.py install")
+
+
+def firetv_remove(args, config):
+    apps = config.get("apps", [])
+    keep = [a for a in apps if args.name not in (a["name"], a["package"])]
+    if len(keep) == len(apps):
+        fail(f"No Fire TV app called {args.name}. tv.py firetv list shows them.")
+    config["apps"] = keep
+    save_json(FIRETV_JSON, config, private=True)
+    say(f"✓ Removed {args.name}. Install to update Home: tv.py install")
+
+
+def firetv_list(args, config):
+    if config.get("token"):
+        say(f"Paired with the Fire TV Stick at {config.get('host')} ({config.get('paired', 'date unknown')}).")
+    else:
+        say("Not paired with a Fire TV Stick yet: tv.py firetv pair")
+    for a in config.get("apps", []):
+        say(f"  {a['name']}: {a['package']}")
+    if not config.get("apps"):
+        say("  No Fire TV apps on Home: tv.py firetv add <Name> <package>")
+
+
+def firetv_open(args, config):
+    """Opens an app on the stick from this Mac, to try a package name."""
+    if not config.get("token"):
+        fail("Not paired yet: tv.py firetv pair")
+    host = firetv_find(args, config)
+    if not firetv_wake(host):
+        fail("The stick's remote-control service didn't answer. Is the TV showing the Fire TV?")
+    status, answer = firetv_api(host, f"/v1/FireTV/app/{args.package}", token=config["token"])
+    if status in (401, 403):
+        fail("The stick no longer knows this pairing. Run: tv.py firetv pair")
+    if status != 200:
+        fail(f"The stick said HTTP {status}: {answer}")
+    say(f"✓ Asked the stick to open {args.package}. (It answers OK even for a package it doesn't have.)")
+
+
+def cmd_firetv(args):
+    config = load_json(FIRETV_JSON)
+    {"pair": firetv_pair, "add": firetv_add, "remove": firetv_remove, "list": firetv_list,
+     "open": firetv_open}[args.action](args, config)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -668,11 +878,24 @@ def main():
                        ("debug", "relaunch Clean Hub in debug mode for tv-inspect.mjs")):
         p = sub.add_parser(name, help=text)
         p.add_argument("--tv", help="the TV's IP address (remembered)")
+    p = sub.add_parser("firetv", help="pair with the Fire TV Stick and choose Fire TV apps for Home")
+    actions = p.add_subparsers(dest="action", required=True)
+    a = actions.add_parser("pair", help="pair with the stick (it shows a PIN on the TV)")
+    a.add_argument("--firetv", help="the stick's IP address (found on the network if left out)")
+    a = actions.add_parser("add", help="put a Fire TV app on Home")
+    a.add_argument("name", help="the name Home shows, e.g. StbEmu")
+    a.add_argument("package", help="its Android package, e.g. com.mvas.stb.emu.pro")
+    a = actions.add_parser("remove", help="take a Fire TV app off Home")
+    a.add_argument("name", help="its name or package")
+    actions.add_parser("list", help="show the pairing and the Fire TV apps")
+    a = actions.add_parser("open", help="open an app on the stick from this Mac, to try a package name")
+    a.add_argument("package")
+    a.add_argument("--firetv", help="the stick's IP address")
     args = parser.parse_args()
     {
         "install-sdk": cmd_install_sdk, "setup": cmd_setup, "package": cmd_package, "doctor": cmd_doctor,
         "install": cmd_install, "open": cmd_open, "uninstall": cmd_uninstall, "ids": cmd_ids,
-        "debug": cmd_debug,
+        "debug": cmd_debug, "firetv": cmd_firetv,
     }[args.command](args)
 
 

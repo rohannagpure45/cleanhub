@@ -81,6 +81,47 @@ The TV takes about 3 seconds to list its inputs, so Clean Hub asks when it
 starts and whenever it comes back to the front. Pressing OK then switches in
 about 0.3 s.
 
+## Fire TV apps on Home
+
+An app on the Fire Stick can get its own item on Home, right after *Fire TV*.
+OK switches the TV to the stick (as *Fire TV* does) and has the stick open
+that app. It uses the stick's own remote-control API, the one Amazon's Fire TV
+phone app uses, so the stick needs no developer options.
+
+Once, from the Mac, with the TV showing the Fire TV:
+
+```sh
+python3 scripts/tv.py firetv pair                          # the TV shows a PIN; type it in
+python3 scripts/tv.py firetv add StbEmu com.mvas.stb.emu.pro
+python3 scripts/tv.py install
+```
+
+`firetv add` takes the name Home shows and the app's Android package (the
+`id=` in its Google Play address). `firetv open <package>` tries a package
+from the Mac first; the stick answers OK even for a package it doesn't have,
+so watch the TV. `firetv list` shows the pairing and the apps, and
+`firetv remove <name>` takes one off (then `install` again).
+
+The pairing (the stick's address and a client token) stays in
+`~/.cleanhub/firetv.json` and goes only into the build installed on the TV,
+never the repository. The apps need *Fire TV on Home* set to the stick's
+input.
+
+**How it works.** The page can't call the stick: its API is HTTPS behind
+Amazon's private certificate, which the TV's browser engine refuses. So
+Clean Hub carries a small background service (`app/service/firetv.js`) that
+runs in the TV's Node.js runtime. On OK the page switches the input and hands
+the service the package; the service wakes the stick's remote-control server
+(DIAL, port 8009), then asks it to open the app (HTTPS, port 8080), retrying
+for up to 30 seconds so a stick that was asleep has time to wake. If the
+stick's address has changed, the service finds it again on the network. If it
+can't open the app, Clean Hub says why when you come back to it.
+
+**If it stops working.** *Fire TV isn't paired* means the stick forgot the
+pairing (after a reset, say): run `firetv pair` and `install` again. If the
+stick won't answer at all, restart it (hold Select + Play/Pause on its remote
+for 5 seconds): its remote-control server can hang until the stick restarts.
+
 ## Ambient: leaving it on all day
 
 Ambient is first on Home. It shows a wallpaper with a small clock that moves

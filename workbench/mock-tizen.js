@@ -57,6 +57,8 @@
 
   window.__mock = {
     launches: launches,
+    appControls: [], // what the page asked the Fire TV service, as { id, data }
+    ports: {}, // local message port listeners, by name
     sources: [],
     hidden: 0,
     inputQueries: 0,
@@ -75,11 +77,47 @@
     release: function () {
       var pending = held.splice(0);
       pending.forEach(function (fn) { fn(); });
+    },
+    // Plays the Fire TV service's answer, e.g. { package, state: 'unreachable' }.
+    fireTvAnswer: function (result) {
+      var listener = window.__mock.ports.firetv;
+      if (listener) listener([{ key: 'result', value: JSON.stringify(result) }]);
     }
   };
 
   window.tizen = {
+    ApplicationControl: function (operation, uri, mime, category, data) {
+      this.operation = operation;
+      this.data = data || [];
+    },
+    ApplicationControlData: function (key, value) {
+      this.key = key;
+      this.value = value;
+    },
+    // ?fireTvFail=1: the Fire TV service won't start.
+    messageport: {
+      requestLocalMessagePort: function (name) {
+        return {
+          addMessagePortListener: function (fn) {
+            window.__mock.ports[name] = fn;
+            return 1;
+          }
+        };
+      }
+    },
     application: {
+      launchAppControl: function (control, id, ok, fail) {
+        setTimeout(function () {
+          if (params.get('fireTvFail') === '1') {
+            fail({ name: 'NotFoundError', message: 'No such app' });
+            return;
+          }
+          var data = {};
+          control.data.forEach(function (d) { data[d.key] = d.value; });
+          window.__mock.appControls.push({ id: id, operation: control.operation, data: data });
+          ok();
+        }, 10);
+      },
       getAppsInfo: function (ok, fail) {
         if (hang) return;
         function answer() {

@@ -3,6 +3,7 @@
 //   npm run dev            -> http://127.0.0.1:8777/
 //   ?apps=typical|many|none|unknown   ?listFail=1   ?fail=<appId>,<appId>
 //   ?music=gap|broken|none   (swaps the Ambient playlist; see playlistFor)
+//   ?fireApps=1 (StbEmu as a Fire TV app on Home)   ?fireTvFail=1
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
@@ -70,6 +71,11 @@ export function start(port = PORT) {
           '<script src="/__workbench/mock-tizen.js"></script>\n  <script src="js/catalog.js">');
       }
       if (path === '/music/playlist.js') body = playlistFor(req, String(body));
+      // ?fireApps=1 puts a Fire TV app on Home, as a paired build would.
+      if (path === '/js/firetv-apps.js' && req.headers.referer && new URL(req.headers.referer).searchParams.get('fireApps')) {
+        body = String(body).replace('CH.fireTvApps = [];',
+          'CH.fireTvApps = [{ "name": "StbEmu", "package": "com.mvas.stb.emu.pro" }];');
+      }
       // A test playlist replaces the whole list, so the 1920s set stays out.
       if (path === '/music/vintage.js' && req.headers.referer && new URL(req.headers.referer).searchParams.get('music')) {
         body = '/* replaced by a test playlist */';

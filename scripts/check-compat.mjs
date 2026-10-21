@@ -52,6 +52,16 @@ for (const file of files('js', '.js')) {
   scan(file, stripJs(text), JS_APIS);
 }
 
+// The Fire TV service runs in the TV's Node.js 12 runtime, not the page, so
+// it gets Node 12's syntax (ES2019) and no browser APIs.
+for (const file of files('service', '.js')) {
+  try {
+    acorn.parse(readFileSync(join(APP, file), 'utf8'), { ecmaVersion: 2019, sourceType: 'script' });
+  } catch (e) {
+    problems.push(`${file}:${e.loc ? e.loc.line : '?'}  syntax newer than Node 12 (ES2019): ${e.message}`);
+  }
+}
+
 const CSS_RULES = [
   [/\baspect-ratio\s*:/g, 'aspect-ratio needs Chromium 88'],
   [/(^|[;{\s])inset\s*:/g, 'inset needs Chromium 87'],
@@ -84,4 +94,4 @@ if (problems.length) {
   console.error('Compatibility check failed:\n' + problems.map((p) => '  ' + p).join('\n'));
   process.exit(1);
 }
-console.log('Compatibility check passed (ES2017 syntax, Chromium 76 CSS/APIs, offline).');
+console.log('Compatibility check passed (ES2017 syntax, Chromium 76 CSS/APIs, offline; Node 12 service).');

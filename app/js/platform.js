@@ -160,6 +160,61 @@
     });
   }
 
+  // Clean Hub's background service (service/firetv.js), which opens apps on
+  // the Fire TV Stick. The page can't reach the stick itself: its API is HTTPS
+  // behind Amazon's private certificate, which the browser engine refuses.
+  const FIRETV_SERVICE = 'CleanHub01.FireTv';
+  const FIRETV_PORT = 'firetv';
+
+  // Hands the service the package to open. Resolves once it has the request;
+  // how it went arrives later through onFireTv.
+  function openOnFireTv(pkg) {
+    return new Promise(function (resolve, reject) {
+      const t = tizen();
+      if (!onTV() || !t.ApplicationControl || !t.application.launchAppControl) {
+        reject(new Error('Not running on a TV'));
+        return;
+      }
+      const timer = root.setTimeout(function () {
+        reject(new Error('The Fire TV service did not start'));
+      }, TIMEOUT_MS);
+      try {
+        const control = new t.ApplicationControl('http://tizen.org/appcontrol/operation/default', null, null, null,
+          [new t.ApplicationControlData('package', [pkg])]);
+        t.application.launchAppControl(control, FIRETV_SERVICE, function () {
+          root.clearTimeout(timer);
+          resolve();
+        }, function (err) {
+          root.clearTimeout(timer);
+          reject(new Error(err && err.message ? err.message : 'launchAppControl failed'));
+        });
+      } catch (e) {
+        root.clearTimeout(timer);
+        reject(e);
+      }
+    });
+  }
+
+  // Calls `listener` with each result the Fire TV service sends back, e.g.
+  // { package, state: 'opened' | 'unpaired' | 'unreachable', detail }.
+  function onFireTv(listener) {
+    try {
+      tizen().messageport.requestLocalMessagePort(FIRETV_PORT).addMessagePortListener(function (data) {
+        (data || []).forEach(function (d) {
+          if (d.key !== 'result') return;
+          try {
+            listener(JSON.parse(d.value));
+          } catch (e) {
+            // Not ours, or garbled: nothing useful to show.
+          }
+        });
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Steps aside so the TV shows its main picture (and the remote reaches the
   // device on it); Clean Hub keeps running in the background.
   function hide() {
@@ -215,6 +270,8 @@
     launch: launch,
     listInputs: listInputs,
     setSource: setSource,
+    openOnFireTv: openOnFireTv,
+    onFireTv: onFireTv,
     hide: hide,
     screenSaver: screenSaver,
     iconUrl: iconUrl,
