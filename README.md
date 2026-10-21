@@ -40,6 +40,9 @@ exactly as they are.
   music off (the reels keep their sound), ▶ skips a song, Back goes Home.
 - **Fire TV on Home.** One press switches the TV to the Fire Stick's HDMI
   input, full screen, in about 0.3 s.
+- **Fire TV apps on Home.** An app on the Fire Stick (StbEmu, say) can have
+  its own item: one press switches to the stick and has it open that app
+  (see [docs/TV-SETUP.md](docs/TV-SETUP.md#fire-tv-apps-on-home)).
 - **Settings is the button top right.** Press ▶ from the list, or ▲ from the
   dock; ◀, ▼ or Back returns to your app.
 - **Your apps, your order.** Settings → Apps on Home. OK adds an app; on an
@@ -55,8 +58,8 @@ exactly as they are.
 - **Fast on the TV.** Backgrounds and their frosted "glass" copies are
   pre-rendered images, and focus moves only animate `transform` and `opacity`.
   Nothing blurs or repaints the full screen as you move.
-- **Offline.** Fonts, images and music are bundled; the app makes no network
-  requests.
+- **Offline.** Fonts, images and music are bundled. The only network traffic
+  is to your own Fire TV Stick, when you open one of its apps from Home.
 
 ![Ambient](docs/screens/ambient-lamp.png)
 
@@ -153,6 +156,8 @@ app/                the .wgt contents that ship to the TV
                     ui.js: DOM; main.js: state and remote keys
                     player.js: Ambient's music; walls.js: its moving wallpapers (generated)
                     brainrot.js: the feed's words; reel.js, reel-more.js: its canvas scenes and sounds
+                    firetv-apps.js: Fire TV apps on Home (tv.py fills it in the build)
+  service/firetv.js background service (Node.js 12) that opens apps on the Fire TV Stick
   img/              backgrounds and wallpapers (generated); wall/: the wallpapers' moving layers;
                     apps/: app icons (fetched)
   music/            Ambient's tracks: the originals (playlist.js), a folder and a .js per genre,

@@ -192,3 +192,92 @@ class DebugPortTest(unittest.TestCase):
         start = time.time()
         self.assertIsNone(tv.read_debug_port(proc, 2))
         self.assertLess(time.time() - start, 8)
+
+
+class FireTvTest(unittest.TestCase):
+    """`tv.py firetv`: the pairing and app list live in ~/.cleanhub, and only a build gets them."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.state = self.tmp / "state"
+        self.app = self.tmp / "dist-app"
+        (self.app / "service").mkdir(parents=True)
+        (self.app / "js").mkdir()
+        for p in [mock.patch.object(tv, "STATE", self.state), mock.patch.object(tv, "say", lambda *a: None)]:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def args(self, **kw):
+        return type("A", (), dict({"firetv": None}, **kw))()
+
+    def saved(self):
+        return tv.load_json(tv.FIRETV_JSON)
+
+    def apps_in_build(self):
+        text = (self.app / "js" / "firetv-apps.js").read_text()
+        return json.loads(text.split("CH.fireTvApps = ", 1)[1].rsplit(";\n})", 1)[0])
+
+    def test_a_paired_build_gets_the_pairing_and_the_apps(self):
+        apps = tv.write_firetv(self.app, {"host": "192.168.1.88", "token": "Tok", "paired": "2026-10-20",
+                                          "apps": [{"name": "StbEmu", "package": "com.mvas.stb.emu.pro"}]})
+        self.assertEqual([a["name"] for a in apps], ["StbEmu"])
+        pairing = self.app / "service" / "config.json"
+        self.assertEqual(json.loads(pairing.read_text()), {"host": "192.168.1.88", "token": "Tok"})
+        self.assertEqual(pairing.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.apps_in_build(), [{"name": "StbEmu", "package": "com.mvas.stb.emu.pro"}])
+
+    def test_names_are_escaped_into_the_script(self):
+        name = 'Bob\'s "TV" </script> ✓'
+        tv.write_firetv(self.app, {"host": "h", "token": "t", "apps": [{"name": name, "package": "a.b"}]})
+        self.assertEqual(self.apps_in_build()[0]["name"], name)
+
+    def test_without_a_pairing_home_gets_no_fire_tv_apps(self):
+        (self.app / "service" / "config.json").write_text("{}")
+        apps = tv.write_firetv(self.app, {"apps": [{"name": "StbEmu", "package": "com.mvas.stb.emu.pro"}]})
+        self.assertEqual(apps, [])
+        self.assertEqual(self.apps_in_build(), [])
+        self.assertFalse((self.app / "service" / "config.json").exists(), "a stale pairing is removed")
+
+    def test_add_replaces_the_same_package_and_checks_it(self):
+        tv.firetv_add(self.args(name="Stb", package="com.mvas.stb.emu.pro"), {})
+        tv.firetv_add(self.args(name="StbEmu", package="com.mvas.stb.emu.pro"), self.saved())
+        self.assertEqual(self.saved()["apps"], [{"name": "StbEmu", "package": "com.mvas.stb.emu.pro"}])
+        self.assertEqual((self.state / tv.FIRETV_JSON).stat().st_mode & 0o777, 0o600)
+        for bad in ("../FireTV?action=home", "nodots", "com.x/y"):
+            with self.assertRaises(SystemExit):
+                tv.firetv_add(self.args(name="X", package=bad), self.saved())
+
+    def test_remove_by_name_or_package(self):
+        config = {"apps": [{"name": "StbEmu", "package": "com.mvas.stb.emu.pro"}, {"name": "Kodi", "package": "org.xbmc.kodi"}]}
+        tv.firetv_remove(self.args(name="org.xbmc.kodi"), config)
+        tv.firetv_remove(self.args(name="StbEmu"), self.saved())
+        self.assertEqual(self.saved()["apps"], [])
+        with self.assertRaises(SystemExit):
+            tv.firetv_remove(self.args(name="Nope"), self.saved())
+
+    def pair(self, verify, pin="5564", config=None):
+        calls = []
+
+        def api(host, path, body=None, token=None, timeout=10, method="POST"):
+            calls.append((host, path, body))
+            return (200, {"description": "OK"}) if path.endswith("/display") else verify
+
+        with mock.patch.object(tv, "firetv_find", lambda args, config: "192.168.1.88"), \
+                mock.patch.object(tv, "firetv_wake", lambda host: True), \
+                mock.patch.object(tv, "firetv_api", api), \
+                mock.patch("builtins.input", lambda prompt: pin):
+            tv.firetv_pair(self.args(), config if config is not None else {})
+        return calls
+
+    def test_pair_saves_the_token_and_keeps_the_apps(self):
+        apps = [{"name": "StbEmu", "package": "com.mvas.stb.emu.pro"}]
+        calls = self.pair((200, {"description": "Wj9PP8I"}), config={"apps": apps})
+        self.assertEqual(calls, [("192.168.1.88", "/v1/FireTV/pin/display", {"friendlyName": "Clean Hub"}),
+                                 ("192.168.1.88", "/v1/FireTV/pin/verify", {"pin": "5564"})])
+        saved = self.saved()
+        self.assertEqual((saved["host"], saved["token"], saved["apps"]), ("192.168.1.88", "Wj9PP8I", apps))
+
+    def test_a_wrong_pin_saves_nothing(self):
+        with self.assertRaises(SystemExit):
+            self.pair((400, {"description": "Invalid pin"}), pin="0000")
+        self.assertEqual(self.saved(), {})

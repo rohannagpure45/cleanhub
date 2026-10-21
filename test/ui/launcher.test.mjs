@@ -1084,6 +1084,89 @@ test('Fire TV: stepping the setting through every input queries the TV once', as
   assert.equal(await page.evaluate(() => window.__mock.inputQueries), 1);
 });
 
+// ---- Fire TV apps ---------------------------------------------------------------
+
+const STBEMU = 'com.mvas.stb.emu.pro';
+
+test('a Fire TV app sits after Fire TV; OK switches to the input and has the stick open it', async () => {
+  await open('?fireApps=1', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
+  assert.deepEqual((await homeNames()).slice(0, 3), ['Fire TV', 'StbEmu', 'Netflix']);
+  await press('ArrowDown');
+  assert.equal(await focusedHome(), 'StbEmu');
+  await press('Enter');
+  await page.waitForFunction(() => window.__mock.launches.length === 1);
+  assert.deepEqual(await page.evaluate(() => window.__mock.sources), ['HDMI 4']);
+  assert.deepEqual(await page.evaluate(() => window.__mock.appControls), [{
+    id: 'CleanHub01.FireTv',
+    operation: 'http://tizen.org/appcontrol/operation/default',
+    data: { package: [STBEMU] }
+  }], 'asks the Fire TV service before stepping aside');
+  assert.deepEqual(await page.evaluate(() => window.__mock.launches), ['org.tizen.tv-viewer']);
+  assert.deepEqual(errors, []);
+});
+
+test('Fire TV itself still only switches the input', async () => {
+  await open('?fireApps=1', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
+  await press('Enter'); // Fire TV
+  await page.waitForFunction(() => window.__mock.launches.length === 1);
+  assert.deepEqual(await page.evaluate(() => window.__mock.appControls), []);
+});
+
+test('Fire TV apps need Fire TV on Home', async () => {
+  await open('?fireApps=1', { settings: S({ ambient: 'off' }) }); // input off
+  assert.equal((await homeNames()).indexOf('StbEmu'), -1);
+});
+
+test('a build that isn\'t paired with the stick has no Fire TV apps', async () => {
+  await open('', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
+  assert.deepEqual((await homeNames()).slice(0, 2), ['Fire TV', 'Netflix']);
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.__mock.ports)), [], 'no message port either');
+});
+
+test('the stick\'s failure is told when Clean Hub comes back', async () => {
+  await open('?fireApps=1', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
+  await press('ArrowDown');
+  await press('Enter');
+  await page.waitForFunction(() => window.__mock.launches.length === 1);
+  await page.evaluate(() => window.__mock.goHidden()); // the TV viewer is in front
+  await page.evaluate((p) => window.__mock.fireTvAnswer({ package: p, state: 'unreachable', detail: 'no answer' }), STBEMU);
+  await page.evaluate(() => window.__mock.returnFromApp());
+  assert.equal(await toastText(), 'Couldn’t reach the Fire TV to open StbEmu');
+});
+
+test('a lost pairing says how to pair again', async () => {
+  await open('?fireApps=1', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
+  await page.evaluate((p) => window.__mock.fireTvAnswer({ package: p, state: 'unpaired' }), STBEMU);
+  assert.match(await toastText(), /isn’t paired with Clean Hub \(tv\.py firetv pair\)/);
+});
+
+test('success, or a failure from long ago, says nothing on coming back', async () => {
+  await page.clock.install();
+  await open('?fireApps=1', { settings: S({ input: 'hdmi4', ambient: 'off' }), wait: false });
+  await page.waitForFunction(() => window.CleanHub && window.CleanHub.main);
+  await page.clock.runFor(500);
+  const answerWhileAway = async (state, away) => {
+    await page.evaluate(() => window.__mock.goHidden());
+    await page.evaluate(([p, s]) => window.__mock.fireTvAnswer({ package: p, state: s }), [STBEMU, state]);
+    await page.clock.fastForward(away);
+    await page.evaluate(() => window.__mock.returnFromApp());
+  };
+  await answerWhileAway('opened', 1000);
+  assert.equal(await toastText(), '');
+  await answerWhileAway('unreachable', 3 * 60 * 1000);
+  assert.equal(await toastText(), '', 'stale news is dropped');
+});
+
+test('if the Fire TV service will not start, the input still switches and it says so', async () => {
+  await open('?fireApps=1&fireTvFail=1', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
+  await press('ArrowDown');
+  await press('Enter');
+  await page.waitForFunction(() => window.__mock.launches.length === 1);
+  assert.deepEqual(await page.evaluate(() => window.__mock.sources), ['HDMI 4']);
+  await page.waitForFunction(() => document.getElementById('toast').classList.contains('is-shown'));
+  assert.equal(await toastText(), 'Couldn’t ask the Fire TV to open StbEmu');
+});
+
 test('Fire TV: a TV that never answers gets a message instead of silence', async () => {
   await page.clock.install();
   await open('?inputHang=1', { settings: S({ input: 'hdmi4', ambient: 'off' }), wait: false });

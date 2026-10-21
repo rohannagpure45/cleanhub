@@ -6,8 +6,12 @@
   - required_version must not exceed the TV's Tizen version (6.5 on 2022 sets).
   - Only public-level privileges, so a plain Tizen developer certificate can
     sign it: application.launch opens other apps; application.info covers
-    getAppsInfo's extra fields; tv.window switches the TV to an HDMI input.
-  - No <access> element and no internet privilege: the app runs fully offline.
+    getAppsInfo's extra fields; tv.window switches the TV to an HDMI input;
+    internet lets the Fire TV service reach the Fire TV Stick on the home
+    network.
+  - The page has no <access> element, so it makes no network requests. Only
+    the background service (service/firetv.js) does, and only to the paired
+    Fire TV Stick, when a Fire TV app is opened from Home.
 -->
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
         id="http://cleanhub.local/launcher" version="0.1.0" viewmodes="maximized">
@@ -20,6 +24,12 @@
   <tizen:privilege name="http://tizen.org/privilege/application.info"/>
   <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
   <tizen:privilege name="http://tizen.org/privilege/tv.window"/>
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <tizen:service id="CleanHub01.FireTv" type="ui">
+    <tizen:content src="service/firetv.js"/>
+    <tizen:name>Clean Hub Fire TV</tizen:name>
+    <tizen:description>Opens apps on the Fire TV Stick</tizen:description>
+  </tizen:service>
   <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
                  encryption="disable" install-location="auto" hwkey-event="enable"/>
 </widget>

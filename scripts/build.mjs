@@ -71,6 +71,14 @@ export function problems() {
   if (pkg.version !== m.version) out.push(`package.json version ${pkg.version} != config.xml ${m.version}`);
   if (!main || main[1] !== m.version) out.push(`main.js VERSION ${main && main[1]} != config.xml ${m.version}`);
   if (!self || self[1] !== m.packageId + '.') out.push(`apps.js selfIdPrefix ${self && self[1]} != "${m.packageId}."`);
+  // The page starts the Fire TV service by id, and the service answers the page by id.
+  const xml = readFileSync(ROOT + 'app/config.xml', 'utf8');
+  const service = (xml.match(/<tizen:service\s+id="([^"]+)"/) || [])[1];
+  const asked = (readFileSync(ROOT + 'app/js/platform.js', 'utf8').match(/const FIRETV_SERVICE = '([^']+)'/) || [])[1];
+  const answers = (readFileSync(ROOT + 'app/service/firetv.js', 'utf8').match(/const UI_APP = '([^']+)'/) || [])[1];
+  if (!service || service.indexOf(m.packageId + '.') !== 0) out.push(`service id "${service}" must start with "${m.packageId}."`);
+  if (asked !== service) out.push(`platform.js FIRETV_SERVICE ${asked} != config.xml service ${service}`);
+  if (answers !== m.appId) out.push(`service/firetv.js UI_APP ${answers} != ${m.appId}`);
   for (const f of ['index.html', 'icon.png', 'css/fonts.css', 'img/bg-dusk.jpg']) {
     if (!existsSync(ROOT + 'app/' + f)) out.push(`app/${f} is missing (run the asset scripts)`);
   }
@@ -89,7 +97,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
   execFileSync(process.execPath, [ROOT + 'scripts/check-compat.mjs'], { stdio: 'inherit' });
   rmSync(ROOT + 'dist/app', { recursive: true, force: true });
-  cpSync(ROOT + 'app', ROOT + 'dist/app', { recursive: true });
+  // A Fire TV pairing never ships from app/; tv.py adds it to dist/app.
+  cpSync(ROOT + 'app', ROOT + 'dist/app', { recursive: true, filter: (src) => !src.endsWith('/service/config.json') });
   const m = manifest();
   console.log(`Built dist/app (${m.appId} ${m.version}).`);
 }
