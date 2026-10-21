@@ -250,7 +250,7 @@
     save();
     CH.ui.applyLook(next);
     if (relayout) renderHome(remembered ? remembered.id : null);
-    if (next.music !== prev.music && next.music === 'off') CH.player.pause();
+    if (next.music !== prev.music) changeMusic(next.music);
     if (next.input !== prev.input) cancelSwitch();
     // The input list covers every input, so one fetch serves any choice.
     if (next.input !== 'off' && (prev.input === 'off' || !inputs)) prefetchInputs();
@@ -565,9 +565,31 @@
     }
   }
 
+  function musicOn() {
+    return state.settings.music !== 'off';
+  }
+
+  // The tracks for a Music setting: 'all', 'originals', 'vintage' (1920s).
+  function tracksFor(music) {
+    return (CH.playlist || []).filter(function (t) {
+      if (music === 'originals') return t.set !== '1920s';
+      if (music === 'vintage') return t.set === '1920s';
+      return music !== 'off';
+    });
+  }
+
+  // A new Music choice: a new playlist, from its start; playing on if Ambient is up.
+  function changeMusic(music) {
+    const wasPlaying = CH.player.state().wanted;
+    CH.player.pause();
+    CH.player.init(tracksFor(music), 0, onPlayer);
+    if (state.screen === 'ambient' && music !== 'off' && wasPlaying) CH.player.play();
+    if (state.screen === 'ambient') CH.ui.updateAmbient(CH.player.state(), music !== 'off');
+  }
+
   function onPlayer() {
     if (state.screen === 'ambient') {
-      CH.ui.updateAmbient(CH.player.state(), state.settings.music === 'on');
+      CH.ui.updateAmbient(CH.player.state(), musicOn());
       saveAmbient(true);
     }
   }
@@ -597,8 +619,8 @@
     state.screen = 'ambient';
     CH.ui.openAmbient(true);
     CH.platform.screenSaver(false);
-    CH.ui.updateAmbient(CH.player.state(), state.settings.music === 'on');
-    if (state.settings.music === 'on' && play !== false) CH.player.play();
+    CH.ui.updateAmbient(CH.player.state(), musicOn());
+    if (musicOn() && play !== false) CH.player.play();
     saveAmbient(true);
     tick();
     showControls();
@@ -625,7 +647,7 @@
       return;
     }
     const wasShown = state.controlsShown;
-    const music = state.settings.music === 'on';
+    const music = musicOn();
     showControls();
     // The first key only wakes the controls, except OK when the status line
     // is asking for it ('Press OK to play').
@@ -771,7 +793,7 @@
     }
     renderHome(null);
     const ambient = s ? readAmbient() : {};
-    CH.player.init(CH.playlist, ambient.track, onPlayer);
+    CH.player.init(tracksFor(state.settings.music), ambient.track, onPlayer);
     // Left on Ambient (e.g. the TV went off with it showing): come back to it.
     if (ambient.open && state.settings.ambient === 'on') openAmbient(!ambient.paused);
     doc.addEventListener('keydown', onKey);

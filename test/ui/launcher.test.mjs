@@ -32,7 +32,7 @@ beforeEach(async () => {
 });
 
 const DEFAULT_HOME = ['Netflix', 'YouTube', 'Prime Video', 'Disney+', 'HBO Max', 'Plex', 'Tubi', 'Spotify'];
-const S = (o = {}) => Object.assign({ v: 1, layout: 'list', theme: 'dusk', font: 'manrope', focus: 'glass', icons: 'on', clock: '12', apps: null }, o);
+const S = (o = {}) => Object.assign({ v: 1, layout: 'list', theme: 'dusk', font: 'manrope', focus: 'glass', icons: 'on', clock: '12', music: 'all', apps: null }, o);
 
 // Most tests are about apps, so they start with Ambient hidden; the Ambient
 // tests pass settings that show it.
@@ -648,7 +648,7 @@ test('Settings can hide Ambient from Home or turn its music off', async () => {
   await openSettings();
   const rows = await page.$$eval('#sheet .sheet-label', (els) => els.map((e) => e.textContent));
   await press('ArrowDown', rows.indexOf('Ambient music'));
-  await press('ArrowRight');
+  await press('ArrowLeft'); // All -> Off (wraps)
   assert.equal((await state()).settings.music, 'off');
   await press('ArrowUp', 2); // Ambient on Home
   await press('ArrowRight');
@@ -893,4 +893,27 @@ test('Press OK to play: one OK starts the music when autoplay was refused', asyn
   } finally {
     await strict.close();
   }
+});
+
+test('Ambient music can be the originals, the 1920s recordings, or both', async () => {
+  const sets = async () => page.evaluate(() => {
+    const st = window.CleanHub.player.state();
+    return { count: st.count, first: st.track && st.track.title };
+  });
+  await open('', { settings: S({ music: 'all' }) });
+  const all = await sets();
+  assert.equal(all.count, 15, '5 originals + 10 recordings from the 1920s');
+  await openSettings();
+  const rows = await page.$$eval('#sheet .sheet-label', (els) => els.map((e) => e.textContent));
+  await press('ArrowDown', rows.indexOf('Ambient music'));
+  await press('ArrowRight'); // Originals
+  assert.deepEqual(await sets(), { count: 5, first: 'Lamp Light' });
+  await press('ArrowRight'); // 1920s
+  assert.deepEqual(await sets(), { count: 10, first: 'Whispering' });
+  assert.equal(await page.$eval('#sheet .sheet-row.is-focused .sheet-value-text', (e) => e.textContent), '1920s');
+});
+
+test('an older saved "music on" setting means All', async () => {
+  await open('', { settings: Object.assign(S(), { music: 'on' }) });
+  assert.equal((await state()).settings.music, 'all');
 });

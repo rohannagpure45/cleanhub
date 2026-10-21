@@ -132,6 +132,27 @@ script is seeded, so it rebuilds the same tracks every time. To use other
 music, drop `.m4a` or `.mp3` files in `app/music` and list them in
 `app/music/playlist.js`.
 
+Ambient also carries ten **1920s recordings**, about 30 minutes. They are
+U.S. public domain: under 17 U.S.C. §1401, recordings published before 1926
+are free as of 2026, and every composition was published before 1931.
+Settings → Ambient music chooses *All*, *Originals*, *1920s* or *Off*.
+`python3 scripts/prepare-vintage.py` re-downloads them from Wikimedia Commons
+and the Library of Congress National Jukebox, filters the 78-rpm rumble and
+hiss, levels them, and encodes them to mono AAC in `app/music/vintage/`.
+
+| Recording | Performers | Year | |
+| --- | --- | --- | --- |
+| Whispering | Paul Whiteman and His Ambassador Orchestra | 1920 | [source](https://commons.wikimedia.org/wiki/File:Paul_Whiteman_and_His_Ambassador_Orchestra_-_Whispering.flac) |
+| Rose Room | Art Hickman's Orchestra | 1919 | [source](https://commons.wikimedia.org/wiki/File:%22Rose_Room%22_(1919),_by_Art_Hickman%27s_Orchestra.oga) |
+| It Had to Be You | Isham Jones & His Orchestra | 1924 | [source](https://commons.wikimedia.org/wiki/File:Isham_Jones_%26_his_Orchestra_-_%22It_Had_to_Be_You%22_(1924).oga) |
+| Somebody Loves Me | Paul Whiteman Orchestra | 1924 | [source](https://commons.wikimedia.org/wiki/File:Somebody_Loves_Me-Victor_19414-Paul_Whiteman_Orchestra.mp3) |
+| What'll I Do | Paul Whiteman Orchestra | 1924 | [source](https://commons.wikimedia.org/wiki/File:What%27ll_I_do_(1924_sound_recording).mp3) |
+| I'll See You in My Dreams | Isham Jones & Ray Miller's Orchestra | 1924 | [source](https://commons.wikimedia.org/wiki/File:I%27ll_See_You_In_My_Dreams_-_Isham_Jones_%26_Ray_Miller_Orch_(1924).ogg) |
+| The St. Louis Blues | Bessie Smith with Louis Armstrong | 1925 | [source](https://commons.wikimedia.org/wiki/File:Bessie_Smith_and_Louis_Armstrong_-_The_St._Louis_Blues_(1925).mp3) |
+| Down Hearted Blues | Bessie Smith | 1923 | [source](https://www.loc.gov/item/jukebox-670189/) |
+| Muscle Shoals Blues | Fletcher Henderson's Orchestra | 1924 | [source](https://www.loc.gov/item/jukebox-673894/) |
+| Copenhagen | The Wolverines with Bix Beiderbecke | 1924 | [source](https://commons.wikimedia.org/wiki/File:BixBeiderbecke-Copenhagen.ogg) |
+
 ## Licence
 
 MIT for the code. Fonts are SIL Open Font License 1.1 (see `app/fonts/`).

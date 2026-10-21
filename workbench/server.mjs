@@ -70,6 +70,10 @@ export function start(port = PORT) {
           '<script src="/__workbench/mock-tizen.js"></script>\n  <script src="js/catalog.js">');
       }
       if (path === '/music/playlist.js') body = playlistFor(req, String(body));
+      // A test playlist replaces the whole list, so the 1920s set stays out.
+      if (path === '/music/vintage.js' && req.headers.referer && new URL(req.headers.referer).searchParams.get('music')) {
+        body = '/* replaced by a test playlist */';
+      }
       const type = TYPES[extname(file)] || 'application/octet-stream';
       // Media elements ask for byte ranges.
       const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');

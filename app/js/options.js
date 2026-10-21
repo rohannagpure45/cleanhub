@@ -44,7 +44,9 @@
       { id: 'black', name: 'Black' }
     ],
     music: [
-      { id: 'on', name: 'On' },
+      { id: 'all', name: 'All' },
+      { id: 'originals', name: 'Originals' },
+      { id: 'vintage', name: '1920s' },
       { id: 'off', name: 'Off' }
     ],
     input: [

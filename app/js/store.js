@@ -17,7 +17,7 @@
     clock: '12',
     ambient: 'on',
     wallpaper: 'lamp',
-    music: 'on',
+    music: 'all',
     input: 'off', // which HDMI input the Home 'Fire TV' item switches to
     apps: null // null = not chosen yet; the home screen picks recognised apps
   };
@@ -29,6 +29,7 @@
   function sanitize(raw) {
     const out = Object.assign({}, DEFAULTS);
     if (!raw || typeof raw !== 'object') return out;
+    if (raw.music === 'on') raw = Object.assign({}, raw, { music: 'all' }); // before the 1920s set
     Object.keys(CH.options).forEach(function (name) {
       if (ids(name).indexOf(raw[name]) !== -1) out[name] = raw[name];
     });

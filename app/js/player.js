@@ -150,7 +150,16 @@
   }
 
   CH.player = {
+    // Also used to switch playlists: drops the old track so play() loads anew.
     init: function (list, startIndex, onChange) {
+      root.clearTimeout(p.retry);
+      root.clearTimeout(p.watch);
+      p.failed = {};
+      if (p.audio) {
+        p.audio.pause();
+        p.audio.removeAttribute('src');
+        p.audio.load();
+      }
       p.list = Array.isArray(list) ? list.filter(function (t) { return t && t.file; }) : [];
       p.index = p.list.length ? Math.max(0, Math.min(p.list.length - 1, startIndex || 0)) : 0;
       p.onChange = onChange;
