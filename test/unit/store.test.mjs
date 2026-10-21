@@ -67,3 +67,9 @@ test('wallpapers: the dark ones first, then the scenes, then Rotate; every choic
   assert.equal(CH.store.sanitize({ wallpaper: 'beach' }).wallpaper, 'lamp', 'unknown falls back to the default');
   assert.equal(CH.store.cycle(CH.store.sanitize({ wallpaper: 'lamp' }), 'wallpaper', -1).wallpaper, 'rotate', 'wraps');
 });
+
+test('wallpaper motion is on by default, and Off survives a reload', () => {
+  assert.equal(CH.store.defaults().motion, 'on');
+  assert.equal(CH.store.sanitize({ motion: 'off' }).motion, 'off');
+  assert.equal(CH.store.sanitize({ motion: 'wobbly' }).motion, 'on');
+});

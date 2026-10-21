@@ -933,6 +933,135 @@ html[data-layout="dock"] .toast {
   transition: none;
 }
 
+/* A moving wallpaper draws its own layers instead of the still. */
+.ambient-wall.has-layers {
+  background-image: none !important;
+}
+
+/* Moving wallpapers (js/walls.js, made by scripts/gen-wallpapers.py). The
+   layers only ever slide (transform) or fade (opacity), which the TV's
+   compositor does without repainting. A drift is two copies of a seamless
+   tile, slid one tile per cycle: left to right, never jumping. */
+.wall-layer,
+.wall-box,
+.wall-drops,
+.wall-shoot-path,
+.wall-sheen {
+  position: absolute;
+}
+
+.wall-layer {
+  background: no-repeat 0 0;
+  background-size: 100% 100%;
+}
+
+.wall-box {
+  overflow: hidden;
+}
+
+@keyframes wall-drift-1920 {
+  from { transform: translate3d(-1920px, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes wall-drift-960 {
+  from { transform: translate3d(-960px, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes wall-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.12; }
+}
+
+@keyframes wall-glimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes wall-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+
+/* Deco's sunburst: one pair of 6 degree wedges per cycle, so it loops seamlessly. */
+@keyframes wall-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(12deg); }
+}
+
+/* Deco's sheen: a soft band crosses the gold, then waits. Its picture runs
+   the other way exactly as fast, so the gold itself stays put. */
+.wall-sheen {
+  left: 0;
+  top: 0;
+  width: 420px;
+  height: 1080px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 0), #000 40%, #000 60%, rgba(0, 0, 0, 0));
+  animation: wall-sheen 15s linear infinite;
+}
+
+.wall-sheen-pic {
+  animation: wall-sheen-pic 15s linear infinite;
+}
+
+@keyframes wall-sheen {
+  0% { transform: translate3d(-420px, 0, 0); }
+  35%, 100% { transform: translate3d(1920px, 0, 0); }
+}
+
+@keyframes wall-sheen-pic {
+  0% { transform: translate3d(420px, 0, 0); }
+  35%, 100% { transform: translate3d(-1920px, 0, 0); }
+}
+
+/* City Rain: drops running down the glass. */
+.wall-drops {
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+}
+
+.wall-drop {
+  position: absolute;
+  top: 0;
+  background:
+    radial-gradient(closest-side, rgba(236, 242, 255, 0.55), rgba(236, 242, 255, 0.16) 70%, rgba(236, 242, 255, 0)) no-repeat 50% 100% / 100% 12%,
+    linear-gradient(to bottom, rgba(220, 232, 255, 0), rgba(220, 232, 255, 0.10) 80%, rgba(220, 232, 255, 0.04));
+  border-radius: 50% 50% 50% 50% / 4% 4% 6% 6%;
+  transform: translate3d(0, -160px, 0);
+}
+
+@keyframes wall-fall {
+  from { transform: translate3d(0, -160px, 0); }
+  to { transform: translate3d(0, 1120px, 0); }
+}
+
+/* Midnight: now and then, a shooting star. */
+.wall-shoot-path {
+  width: 760px;
+  height: 2px;
+  transform-origin: 0 50%;
+}
+
+.wall-shoot {
+  width: 170px;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(to right, rgba(200, 220, 255, 0), rgba(226, 236, 255, 0.85));
+  opacity: 0;
+}
+
+@keyframes wall-shoot {
+  0% { opacity: 0; transform: translate3d(0, 0, 0); }
+  0.6% { opacity: 1; }
+  2.6% { opacity: 0; transform: translate3d(760px, 0, 0); }
+  100% { opacity: 0; transform: translate3d(760px, 0, 0); }
+}
+
 .ambient-wall.wall-lamp { background-image: url(../img/ambient-lamp.jpg); }
 .ambient-wall.wall-midnight { background-image: url(../img/ambient-midnight.jpg); }
 .ambient-wall.wall-sunset { background-image: url(../img/ambient-sunset.jpg); }

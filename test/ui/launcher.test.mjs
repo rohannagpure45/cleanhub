@@ -759,6 +759,104 @@ test('the wallpaper row in Settings shows a swatch of the wallpaper', async () =
   assert.equal(await page.evaluate(() => fetch('img/thumb-wall-rotate.jpg').then((r) => r.status)), 200);
 });
 
+// ---- Moving wallpapers ----------------------------------------------------------
+
+// The CSS animations on the front wallpaper: name, the properties they
+// change, and the element's offset at the current moment.
+const wallAnimations = () => page.evaluate(() => document.getAnimations()
+  .filter((a) => a.effect && a.effect.target && a.effect.target.closest('#ambient .ambient-wall.is-front'))
+  .map((a) => ({
+    name: a.animationName,
+    props: [...new Set(a.effect.getKeyframes().flatMap((k) => Object.keys(k)))]
+      .filter((k) => !['offset', 'computedOffset', 'easing', 'composite'].includes(k)),
+  })));
+
+// Pauses every animation at `ms` and reads each drifting layer's x offset.
+const driftOffsets = (ms) => page.evaluate((t) => {
+  document.getAnimations().forEach((a) => { a.pause(); a.currentTime = t; });
+  return [...document.querySelectorAll('#ambient .ambient-wall.is-front .wall-layer')]
+    .filter((el) => /wall-drift/.test(el.style.animation))
+    .map((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).m41);
+}, ms);
+
+test('scenes move: layers drift left to right and shimmer, only ever sliding or fading', async () => {
+  for (const wall of ['sunset', 'coast', 'dunes', 'aurora', 'rain', 'deco']) {
+    await openAmbient('', S({ wallpaper: wall }));
+    await page.waitForFunction(() => document.querySelector('#ambient .ambient-wall.is-front.has-layers'));
+    const anims = await wallAnimations();
+    assert.ok(anims.length >= 2, `${wall}: ${anims.length} animations`);
+    for (const a of anims) {
+      for (const prop of a.props) assert.ok(['transform', 'opacity'].includes(prop), `${wall}: ${a.name} animates ${prop}`);
+    }
+    if (wall !== 'deco') {
+      // Two seconds apart (a drift wraps round once per cycle, so compare modulo a tile).
+      const before = await driftOffsets(10000);
+      const after = await driftOffsets(12000);
+      assert.ok(before.length >= 1, `${wall}: something drifts`);
+      before.forEach((x, i) => {
+        const moved = (((after[i] - x) % 1920) + 1920) % 1920;
+        assert.ok(moved > 0 && moved < 960, `${wall}: drift ${i} moves right (${x} -> ${after[i]})`);
+      });
+    }
+    const still = await page.$eval('#ambient .ambient-wall.is-front', (e) => getComputedStyle(e).backgroundImage);
+    assert.equal(still, 'none', `${wall}: the still isn't drawn under the layers`);
+    assert.deepEqual(errors, [], `${wall}: no errors`);
+    await page.close();
+    page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
+    errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+  }
+});
+
+test('Wallpaper motion: Off shows the still picture, and On brings the layers back', async () => {
+  await openAmbient('', S({ wallpaper: 'aurora', motion: 'off' }));
+  const front = '#ambient .ambient-wall.is-front';
+  assert.equal(await page.$$eval(front + ' > *', (els) => els.length), 0, 'no layers');
+  assert.match(await page.$eval(front, (e) => getComputedStyle(e).backgroundImage), /ambient-aurora\.jpg/);
+  assert.deepEqual(await wallAnimations(), [], 'nothing moves');
+  await press('Escape');
+  await openSettings();
+  const rows = await sheetLabels();
+  await press('ArrowDown', rows.indexOf('Wallpaper motion'));
+  await press('ArrowRight');
+  assert.equal((await state()).settings.motion, 'on');
+  await press('Escape');
+  await press('ArrowLeft');
+  assert.equal(await focusedHome(), 'Ambient');
+  await press('Enter');
+  await page.waitForFunction((sel) => document.querySelectorAll(sel + ' .wall-layer').length >= 4, front);
+  assert.ok((await wallAnimations()).length >= 2, 'moving again');
+  assert.deepEqual(errors, []);
+});
+
+test('Deco: the sheen sweeps across while the gold under it stays put', async () => {
+  await openAmbient('', S({ wallpaper: 'deco' }));
+  await page.waitForFunction(() => document.querySelector('#ambient .wall-sheen'));
+  for (const ms of [500, 2600, 4800, 9000]) {
+    const [band, pic] = await page.evaluate((t) => {
+      document.getAnimations().forEach((a) => { a.pause(); a.currentTime = t; });
+      return ['.wall-sheen', '.wall-sheen-pic'].map((sel) =>
+        new DOMMatrixReadOnly(getComputedStyle(document.querySelector('#ambient ' + sel)).transform).m41);
+    }, ms);
+    assert.ok(Math.abs(band + pic) < 0.5, `at ${ms} ms the gold moved by ${band + pic} px`);
+    if (ms === 2600) assert.ok(band > 0 && band < 1920, `the band is on screen mid-sweep (${band})`);
+  }
+});
+
+test('after a cross-fade, the old wallpaper’s layers are gone (nothing left running)', async () => {
+  await openAmbient('', S({ wallpaper: 'sunset' }));
+  await page.waitForFunction(() => document.querySelector('#ambient .ambient-wall.is-front.has-layers'));
+  await press('ArrowDown'); // the controls are up on entry, so this acts: Coast
+  await page.waitForFunction(() => /wall-coast/.test(document.querySelector('#ambient .ambient-wall.is-front').className));
+  await page.waitForFunction(() => !document.querySelector('#ambient .ambient-wall.is-under'));
+  assert.equal(await page.$$eval('#ambient .ambient-wall:not(.is-front) *', (els) => els.length), 0);
+  const names = (await wallAnimations()).map((a) => a.name);
+  assert.ok(names.includes('wall-drift-1920'));
+  const stray = await page.evaluate(() => document.getAnimations()
+    .filter((a) => a.effect && a.effect.target && !a.effect.target.isConnected).length);
+  assert.equal(stray, 0, 'no animations left on removed layers');
+});
+
 test('Settings can hide Ambient from Home or turn its music off', async () => {
   await open('', { settings: S() });
   assert.equal(await focusedHome(), 'Ambient');
@@ -767,7 +865,7 @@ test('Settings can hide Ambient from Home or turn its music off', async () => {
   await press('ArrowDown', rows.indexOf('Ambient music'));
   await press('ArrowLeft'); // All -> Off (wraps)
   assert.equal((await state()).settings.music, 'off');
-  await press('ArrowUp', 2); // Ambient on Home
+  await press('ArrowUp', rows.indexOf('Ambient music') - rows.indexOf('Ambient on Home'));
   await press('ArrowRight');
   assert.equal((await state()).settings.ambient, 'off');
   await press('Escape');

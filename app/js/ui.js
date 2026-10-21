@@ -599,7 +599,8 @@
     wallId: null,
     wallSeq: 0,
     wallTimer: null,
-    loading: null, // the next wallpaper's Image while it decodes
+    wallKey: null, // id plus whether it moves: what the front layer shows
+    loading: [], // the next wallpaper's Images while they decode
     text: null,
     title: null,
     status: null,
@@ -618,6 +619,7 @@
     amb.walls.forEach(function (w) { walls.appendChild(w); });
     amb.front = 0;
     amb.wallId = null;
+    amb.wallKey = null;
     el.appendChild(walls);
     const text = h('div', 'ambient-text ' + AMBIENT_SPOTS[amb.spot]);
     text.appendChild(clockEl());
@@ -652,13 +654,20 @@
     return 'dark';
   }
 
-  // Calls done() once wallpaper `id` is decoded (or after a short wait, so a
-  // slow or missing file never holds the change up).
-  function decodeWall(id, done) {
-    if (id === 'black') {
-      done();
-      return;
-    }
+  // The moving layers of wallpaper `id` (from js/walls.js), or null to show
+  // its still picture.
+  function wallLayers(id, moving) {
+    return (moving && CH.wallLayers && CH.wallLayers[id]) || null;
+  }
+
+  // Calls done() once every picture wallpaper `id` needs is decoded (or after
+  // a short wait, so a slow or missing file never holds the change up).
+  function decodeWall(id, moving, done) {
+    const layers = wallLayers(id, moving);
+    const srcs = layers
+      ? layers.filter(function (l) { return l.src; }).map(function (l) { return l.src; })
+      : (id === 'black' ? [] : ['img/ambient-' + id + '.jpg']);
+    let left = srcs.length;
     let called = false;
     const finish = function () {
       if (called) return;
@@ -666,20 +675,110 @@
       root.clearTimeout(timer);
       done();
     };
-    const timer = root.setTimeout(finish, 1500);
-    const img = new root.Image();
-    img.onload = finish;
-    img.onerror = finish;
-    img.src = 'img/ambient-' + id + '.jpg';
-    if (typeof img.decode === 'function') img.decode().then(finish, finish);
-    amb.loading = img;
+    const timer = root.setTimeout(finish, 2500);
+    const one = function () {
+      left -= 1;
+      if (left <= 0) finish();
+    };
+    amb.loading = srcs.map(function (src) {
+      const img = new root.Image();
+      let counted = false;
+      const count = function () {
+        if (counted) return;
+        counted = true;
+        one();
+      };
+      img.onload = count;
+      img.onerror = count;
+      img.src = src;
+      if (typeof img.decode === 'function') img.decode().then(count, count);
+      return img;
+    });
+    if (!srcs.length) finish();
   }
 
-  // Shows wallpaper `id` (never 'rotate': main.js picks the scene). Instant
-  // when Ambient isn't on screen; otherwise the new picture cross-fades in
-  // over the old one once it has decoded, so nothing flashes black.
-  function showWall(id, instant) {
-    if (id === amb.wallId) return;
+  function setBox(el, b) {
+    el.style.left = b.x + 'px';
+    el.style.top = b.y + 'px';
+    el.style.width = b.w + 'px';
+    el.style.height = b.h + 'px';
+  }
+
+  // One layer of a moving wallpaper: a picture with a CSS animation (maybe
+  // clipped or masked by a box, or seen through a moving sheen), or an
+  // effect drawn by CSS alone.
+  function wallLayer(l) {
+    if (l.kind === 'drops') {
+      const drops = h('div', 'wall-drops');
+      l.drops.forEach(function (d) {
+        const drop = h('div', 'wall-drop');
+        drop.style.left = d.x + 'px';
+        drop.style.width = Math.round(10 * d.size) + 'px';
+        drop.style.height = Math.round(120 * d.size) + 'px';
+        drop.style.animation = 'wall-fall ' + d.dur + 's cubic-bezier(0.5, 0, 0.8, 1) ' + (-d.delay) + 's infinite';
+        drops.appendChild(drop);
+      });
+      return drops;
+    }
+    if (l.kind === 'shoot') {
+      const path = h('div', 'wall-shoot-path');
+      path.style.left = l.x + 'px';
+      path.style.top = l.y + 'px';
+      path.style.transform = 'rotate(' + l.angle + 'deg)';
+      const star = h('div', 'wall-shoot');
+      star.style.animation = 'wall-shoot ' + l.dur + 's linear ' + (-l.delay) + 's infinite';
+      path.appendChild(star);
+      return path;
+    }
+    const pic = h('div', 'wall-layer');
+    setBox(pic, l);
+    pic.style.backgroundImage = 'url(' + l.src + ')';
+    if (l.anim) pic.style.animation = l.anim;
+    if (l.origin) pic.style.transformOrigin = l.origin;
+    if (l.sheen) {
+      // A soft band sweeps across while the picture inside it moves the other
+      // way just as fast: the picture stays put and only the band moves.
+      const band = h('div', 'wall-sheen');
+      band.style.animationDuration = l.sheen + 's';
+      pic.className = 'wall-layer wall-sheen-pic';
+      pic.style.animationDuration = l.sheen + 's';
+      band.appendChild(pic);
+      return band;
+    }
+    if (!l.box) return pic;
+    const box = h('div', 'wall-box');
+    setBox(box, l.box);
+    if (l.box.mask) {
+      box.style.webkitMaskImage = l.box.mask;
+      box.style.maskImage = l.box.mask;
+    }
+    box.appendChild(pic);
+    return box;
+  }
+
+  // Puts wallpaper `id` into a layer element; returns its extra class.
+  function fillWall(el, id, moving) {
+    el.innerHTML = '';
+    const layers = wallLayers(id, moving);
+    if (!layers) return '';
+    layers.forEach(function (l) { el.appendChild(wallLayer(l)); });
+    return ' has-layers';
+  }
+
+  // Leaves an element showing nothing, its pictures and animations gone.
+  function emptyWall(el) {
+    el.className = 'ambient-wall';
+    el.innerHTML = '';
+  }
+
+  // Shows wallpaper `id` (never 'rotate': main.js picks the scene), moving or
+  // still. Instant when Ambient isn't on screen; otherwise the new one
+  // cross-fades in over the old once its pictures have decoded, so nothing
+  // flashes black.
+  function showWall(id, instant, moving) {
+    const key = id + (moving ? ':moving' : '');
+    if (key === amb.wallKey) return;
+    amb.wallKey = key;
     amb.wallId = id;
     const seq = ++amb.wallSeq;
     root.clearTimeout(amb.wallTimer);
@@ -689,25 +788,27 @@
       amb.front = 1 - amb.front;
       const next = amb.walls[amb.front];
       amb.el.setAttribute('data-tone', wallKind(id) === 'dark' ? 'dark' : 'scene');
+      const extra = fillWall(next, id, moving);
       if (instant) {
-        next.className = 'ambient-wall wall-' + id + ' is-front is-instant';
-        old.className = 'ambient-wall';
+        next.className = 'ambient-wall wall-' + id + extra + ' is-front is-instant';
+        emptyWall(old);
         return;
       }
       old.className = old.className.replace(/ is-front| is-instant/g, '') + ' is-under';
-      next.className = 'ambient-wall wall-' + id + ' is-front';
+      next.className = 'ambient-wall wall-' + id + extra + ' is-front';
       // The old picture leaves once the new one is fully in: on the fade's
       // end, or a while later if the fade never ran (it was already shown).
-      const done = function () {
+      const done = function (event) {
+        if (event && event.target !== next) return; // a layer's own transition
         next.removeEventListener('transitionend', done);
         root.clearTimeout(amb.wallTimer);
-        if (seq === amb.wallSeq) old.className = 'ambient-wall';
+        if (seq === amb.wallSeq) emptyWall(old);
       };
       next.addEventListener('transitionend', done);
       amb.wallTimer = root.setTimeout(done, WALL_FADE_MS * 3);
     };
     if (instant) place();
-    else decodeWall(id, place);
+    else decodeWall(id, moving, place);
   }
 
   // st: CH.player.state(); musicOn: the Ambient music setting; reel:

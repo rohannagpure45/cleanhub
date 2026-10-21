@@ -95,6 +95,13 @@ Wallpapers (▲ ▼ in Ambient, or Settings → Ambient wallpaper):
   full-colour scenes, with a light clock.
 - **Rotate** shows the scenes in turn, a new one every quarter hour.
 
+They move slowly, as you'd expect them to: clouds and mist drift left to
+right, the aurora drifts and breathes, sand blows across the dunes, the sun's
+glitter sparkles, traffic streams past below the rainy window, Deco's
+sunburst turns and a sheen crosses its gold, dust floats in the lamp light
+and Midnight has the odd shooting star. Black stays still. Settings →
+**Wallpaper motion: Off** shows them all as still pictures.
+
 The TV has timers that would end an all-day session. No app can override
 them, so set them once:
 
@@ -110,7 +117,8 @@ them, so set them once:
 draw. The dark wallpapers are under 2% average brightness, so local dimming
 can turn most zones off. The scenes run from about 13% (Deco) to 70% (Dunes),
 so they draw roughly what ordinary TV does; that's fine for this panel, which
-is LCD and can't burn in.
+is LCD and can't burn in. Motion keeps the TV's graphics chip busy too (a
+little more power); Wallpaper motion: Off saves that.
 - Picture → Expert Settings → **Local Dimming: High**, and a lower
   **Brightness**, help most. So does leaving Power and Energy Saving →
   **Brightness Optimization** on.

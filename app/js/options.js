@@ -52,6 +52,11 @@
       { id: 'deco', name: 'Deco', kind: 'scene' },
       { id: 'rotate', name: 'Rotate', kind: 'rotate' }
     ],
+    // Moving layers (js/walls.js), or the still pictures.
+    motion: [
+      { id: 'on', name: 'On' },
+      { id: 'off', name: 'Off' }
+    ],
     music: [
       { id: 'all', name: 'All' },
       { id: 'originals', name: 'Originals' },
@@ -83,6 +88,7 @@
     { id: 'clock', label: 'Clock' },
     { id: 'ambient', label: 'Ambient on Home' },
     { id: 'wallpaper', label: 'Ambient wallpaper' },
+    { id: 'motion', label: 'Wallpaper motion' },
     { id: 'music', label: 'Ambient music' },
     { id: 'input', label: 'Fire TV on Home' },
     { id: 'reset', kind: 'action', label: 'Reset to defaults' },

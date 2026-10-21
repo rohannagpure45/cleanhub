@@ -17,6 +17,7 @@
     clock: '12',
     ambient: 'on',
     wallpaper: 'lamp',
+    motion: 'on', // the wallpaper's layers move
     music: 'all',
     input: 'off', // which HDMI input the Home 'Fire TV' item switches to
     brainrot: 'off', // Ambient shows the brainrot feed instead of the wallpaper

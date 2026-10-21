@@ -25,7 +25,9 @@ exactly as they are.
   wallpapers are near-black and low power (Lamp, Midnight, Black); six are
   full-colour scenes (Sunset, Coast, Dunes, Aurora, City Rain, Deco); Rotate
   shows a new scene every 15 minutes. ▲▼ in Ambient change it, with a
-  cross-fade.
+  cross-fade. They move: clouds, mist, aurora, blowing sand and traffic drift
+  left to right; glitter, stars and city lights shimmer; Deco's sunburst
+  turns. Settings → Wallpaper motion: Off keeps them still.
 - **Brainrot mode.** The last row of Settings turns Ambient into a TikTok-style
   feed: split-screen stories over an endless runner, a ball escaping rings,
   aura ratings, Italian brainrot and the logo that might hit the corner, with
@@ -52,7 +54,10 @@ exactly as they are.
 ![The six Ambient scenes](docs/screens/ambient-scenes.jpg)
 
 The wallpapers are drawn by `python3 scripts/gen-wallpapers.py` (numpy), so
-there are no image licences to track.
+there are no image licences to track. Each is a still plus the layers that
+move (`app/img/wall/`, placed and timed by `app/js/walls.js`). The TV only
+ever slides or fades those layers, the cheapest motion its compositor does,
+and a drifting layer is two copies of a seamless tile, so it never jumps.
 
 ### What it can't do
 

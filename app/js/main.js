@@ -263,7 +263,9 @@
     if (relayout) renderHome(remembered ? remembered.id : null);
     if (next.music !== prev.music || next.brainrot !== prev.brainrot) changeMusic();
     if (next.input !== prev.input) cancelSwitch();
-    if (next.wallpaper !== prev.wallpaper) CH.ui.showWall(wallNow(), state.screen !== 'ambient');
+    if (next.wallpaper !== prev.wallpaper || next.motion !== prev.motion) {
+      CH.ui.showWall(wallNow(), state.screen !== 'ambient', wallMoves());
+    }
     // The input list covers every input, so one fetch serves any choice.
     if (next.input !== 'off' && (prev.input === 'off' || !inputs)) prefetchInputs();
   }
@@ -574,6 +576,10 @@
     return SCENES[Math.floor(CH.platform.now().getTime() / ROTATE_MS) % SCENES.length];
   }
 
+  function wallMoves() {
+    return state.settings.motion !== 'off';
+  }
+
   function wallLabel(id) {
     if (id === 'rotate') return 'Rotate · a new scene every 15 minutes';
     return CH.store.label('wallpaper', id);
@@ -675,7 +681,7 @@
   function openAmbient(play) {
     cancelSwitch();
     state.screen = 'ambient';
-    CH.ui.showWall(wallNow(), true);
+    CH.ui.showWall(wallNow(), true, wallMoves());
     CH.ui.openAmbient(true);
     CH.platform.screenSaver(false);
     if (brainrotOn()) CH.reel.start(play === false);
@@ -815,7 +821,7 @@
     const now = CH.platform.now();
     CH.ui.updateClock(now, state.settings.clock);
     // Rotate's next scene comes in on the quarter hour (or on coming back).
-    if (state.screen === 'ambient') CH.ui.showWall(wallNow(), false);
+    if (state.screen === 'ambient') CH.ui.showWall(wallNow(), false, wallMoves());
     // Wake just after the next minute starts.
     clockTimer = root.setTimeout(tick, (60 - now.getSeconds()) * 1000 + 50);
   }

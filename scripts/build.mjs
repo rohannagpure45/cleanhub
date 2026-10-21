@@ -31,6 +31,30 @@ export function wallpaperProblems() {
       out.push(`wallpaper ${w.id}: app.css has no .ambient-wall.wall-${w.id} rule`);
     }
   }
+  return out.concat(motionProblems(ctx.CleanHub.options.wallpaper, css));
+}
+
+// Every moving layer in js/walls.js needs its picture, keyframes app.css
+// defines, and (if it drifts) a width of exactly two of its seamless tiles.
+export function motionProblems(walls, css) {
+  const ctx = {};
+  vm.runInNewContext(readFileSync(ROOT + 'app/js/walls.js', 'utf8'), ctx);
+  const layers = ctx.CleanHub.wallLayers;
+  const out = [];
+  const keyframes = new Set([...css.matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]));
+  for (const w of walls) {
+    if (w.kind === 'scene' && !layers[w.id]) out.push(`wallpaper ${w.id}: no moving layers in js/walls.js`);
+  }
+  for (const [id, list] of Object.entries(layers)) {
+    for (const l of list) {
+      if (l.src && !existsSync(ROOT + 'app/' + l.src)) out.push(`wallpaper ${id}: ${l.src} is missing (run npm run wallpapers)`);
+      for (const name of (l.anim || '').split(',').map((a) => a.trim().split(/\s+/)[0]).filter(Boolean)) {
+        if (!keyframes.has(name)) out.push(`wallpaper ${id}: app.css has no @keyframes ${name}`);
+        const drift = name.match(/^wall-drift-(\d+)$/);
+        if (drift && l.w !== 2 * Number(drift[1])) out.push(`wallpaper ${id}: ${l.src} drifts by ${drift[1]} px but is ${l.w} px wide`);
+      }
+    }
+  }
   return out;
 }
 
