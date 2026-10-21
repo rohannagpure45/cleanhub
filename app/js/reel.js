@@ -4,7 +4,8 @@
 // meter, Italian brainrot characters, a logo waiting for the corner) with words
 // from brainrot.js, so there are no video files and no network. Sound effects
 // are synthesised with Web Audio; the music is the player's 'brainrot' set.
-// It draws at 30 fps, only while Ambient shows and isn't paused.
+// It draws at 30 fps, only while Ambient shows and isn't paused. More video
+// kinds plug in from reel-more.js through CH.reel.scenes and CH.reel.kit.
 (function (root) {
   'use strict';
   const CH = root.CleanHub = root.CleanHub || {};
@@ -105,7 +106,8 @@
   // ---- Sound effects ---------------------------------------------------------
 
   // Web Audio, created on first use. If the TV has none, the feed is just quieter.
-  const sfx = { ac: null, on: false, noise: null };
+  // The reels' own sound plays whether or not the music does.
+  const sfx = { ac: null, noise: null };
 
   function audioContext() {
     if (sfx.ac === null) {
@@ -120,7 +122,7 @@
   }
 
   function play(fn) {
-    if (!sfx.on || r.paused || !r.running || r.suspended) return;
+    if (r.paused || !r.running || r.suspended) return;
     const ac = audioContext();
     if (!ac) return;
     try {
@@ -174,6 +176,69 @@
     return 440 * Math.pow(2, (m - 69) / 12);
   }
 
+  // A made-up voice, TikTok-narrator style: a buzzy blip per syllable through
+  // two vowel formants, so words sound spoken without being words. Each
+  // speaker has their own pitch and pace.
+  const VOICES = {
+    narrator: { pitch: 175, wave: 'sawtooth', step: 0.085, gain: 0.5 },
+    me: { pitch: 255, wave: 'square', step: 0.075, gain: 0.3 },
+    them: { pitch: 135, wave: 'sawtooth', step: 0.09, gain: 0.5 },
+    italian: { pitch: 118, wave: 'sawtooth', step: 0.1, gain: 0.55 },
+    deep: { pitch: 72, wave: 'sawtooth', step: 0.14, gain: 0.7 },
+    whisper: { noise: true, step: 0.09, gain: 0.35 }
+  };
+  const VOWELS = [[730, 1090], [270, 2290], [530, 1840], [570, 840], [440, 1020], [660, 1720]];
+
+  function syllable(ac, at, v, f, vowel) {
+    const o = ac.createOscillator();
+    o.type = v.wave;
+    o.frequency.setValueAtTime(f * 1.05, at);
+    o.frequency.exponentialRampToValueAtTime(f * 0.93, at + v.step);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(v.gain * 0.25, at + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + v.step * 0.95);
+    vowel.forEach(function (formant, i) {
+      const bp = ac.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = formant;
+      bp.Q.value = 5;
+      const level = ac.createGain();
+      level.gain.value = i ? 0.5 : 1;
+      o.connect(bp);
+      bp.connect(level);
+      level.connect(g);
+    });
+    g.connect(ac.destination);
+    o.start(at);
+    o.stop(at + v.step + 0.03);
+  }
+
+  // Says `text` (a word or a line) in a voice; returns nothing, schedules all.
+  function say(text, voice) {
+    const v = VOICES[voice] || VOICES.narrator;
+    const words = String(text).replace(/:[a-z]+:/g, ' ').toLowerCase().split(/[^a-z0-9’']+/).filter(Boolean);
+    if (!words.length) return;
+    play(function (ac, at) {
+      let when = at;
+      words.slice(0, 16).forEach(function (w) {
+        const groups = w.match(/[aeiouy]+/g);
+        const n = Math.max(1, Math.min(4, groups ? groups.length : 1));
+        let seed = 0;
+        for (let i = 0; i < w.length; i++) seed = (seed * 31 + w.charCodeAt(i)) % 997;
+        for (let k = 0; k < n; k++) {
+          const s = when + k * v.step;
+          if (v.noise) hiss(ac, s, v.step * 0.9, v.gain * 0.4, VOWELS[(seed + k) % VOWELS.length][1] * 1.4);
+          else syllable(ac, s, v, v.pitch * (1 + (((seed + k * 7) % 9) - 4) * 0.045), VOWELS[(seed + k * 3) % VOWELS.length]);
+        }
+        when += n * v.step + 0.05;
+      });
+    });
+  }
+
+  // A tune for the cappuccina's music box.
+  const MUSIC_BOX = [84, 88, 91, 96, 91, 88, 86, 89, 93, 98, 93, 89];
+
   const SFX = {
     // The deep cinematic hit every brainrot edit leans on.
     boom: function () {
@@ -205,6 +270,131 @@
     swipe: function () {
       play(function (ac, at) {
         hiss(ac, at, 0.28, 0.22, 600, 3200);
+      });
+    },
+    // A text going out, and one coming in.
+    sent: function () {
+      play(function (ac, at) {
+        tone(ac, at, 880, 0.09, 'sine', 0.16, 1760);
+      });
+    },
+    received: function () {
+      play(function (ac, at) {
+        tone(ac, at, 1174.7, 0.18, 'sine', 0.16);
+        tone(ac, at + 0.11, 1568, 0.3, 'sine', 0.14);
+      });
+    },
+    // Kinetic sand giving way under the knife.
+    crunch: function () {
+      play(function (ac, at) {
+        hiss(ac, at, 0.5, 0.5, 2400, 500);
+        hiss(ac, at + 0.05, 0.3, 0.25, 6000, 2000);
+      });
+    },
+    tick: function () {
+      play(function (ac, at) {
+        tone(ac, at, 2000, 0.04, 'square', 0.06);
+      });
+    },
+    pop: function () {
+      play(function (ac, at) {
+        tone(ac, at, 520, 0.12, 'triangle', 0.18, 1040);
+      });
+    },
+    say: say,
+    // The 'Inception' horn under a sigma edit.
+    horn: function () {
+      play(function (ac, at) {
+        [43, 50, 55].forEach(function (m) {
+          tone(ac, at, midiHz(m), 1.6, 'sawtooth', 0.09, midiHz(m) * 0.985);
+        });
+      });
+    },
+    // A coin; a row of them climbs in pitch.
+    coin: function (n) {
+      play(function (ac, at) {
+        const f = midiHz(83 + (n % 5) * 2);
+        tone(ac, at, f, 0.08, 'square', 0.05);
+        tone(ac, at + 0.06, f * 1.5, 0.18, 'square', 0.05);
+      });
+    },
+    hop: function () {
+      play(function (ac, at) {
+        tone(ac, at, 220, 0.16, 'triangle', 0.14, 520);
+      });
+    },
+    thud: function () {
+      play(function (ac, at) {
+        tone(ac, at, 95, 0.12, 'sine', 0.22, 50);
+      });
+    },
+    // A marble on a peg.
+    clack: function (pitch) {
+      play(function (ac, at) {
+        tone(ac, at, 1400 + pitch * 180, 0.035, 'triangle', 0.07);
+      });
+    },
+    // The logo meeting a wall.
+    blip: function () {
+      play(function (ac, at) {
+        tone(ac, at, 660, 0.07, 'square', 0.05);
+      });
+    },
+    cheer: function () {
+      play(function (ac, at) {
+        hiss(ac, at, 1.6, 0.25, 1600, 900);
+        hiss(ac, at + 0.1, 1.4, 0.18, 3200, 2400);
+      });
+    },
+    buzzer: function () {
+      play(function (ac, at) {
+        tone(ac, at, 110, 0.6, 'square', 0.12);
+        tone(ac, at, 116, 0.6, 'sawtooth', 0.1);
+      });
+    },
+    // Fingers on a phone keyboard, while someone is typing.
+    keys: function () {
+      play(function (ac, at) {
+        for (let k = 0; k < 6; k++) hiss(ac, at + k * 0.12 + (k % 2) * 0.03, 0.03, 0.12, 4500);
+      });
+    },
+    scrape: function () {
+      play(function (ac, at) {
+        hiss(ac, at, 0.45, 0.12, 5000, 2500);
+      });
+    },
+    crumble: function () {
+      play(function (ac, at) {
+        for (let k = 0; k < 5; k++) hiss(ac, at + k * 0.06, 0.12, 0.16, 1800 - k * 200);
+      });
+    },
+    // One beat of an Italian brainrot character's own sound.
+    beat: function (kind, i) {
+      play(function (ac, at) {
+        if (kind === 'wood') {
+          tone(ac, at, 820, 0.07, 'sine', 0.35, 640);
+          tone(ac, at, 410, 0.1, 'triangle', 0.2);
+        } else if (kind === 'squeak') {
+          if (i % 2) tone(ac, at, 1900, 0.09, 'sine', 0.1, 2700);
+        } else if (kind === 'twinkle') {
+          const f = midiHz(MUSIC_BOX[i % MUSIC_BOX.length]);
+          tone(ac, at, f, 0.6, 'sine', 0.14);
+          tone(ac, at, f * 3, 0.25, 'sine', 0.03);
+        } else if (kind === 'wa') {
+          syllable(ac, at, { wave: 'sawtooth', step: 0.22, gain: 0.6 }, 220 + (i % 3) * 30, VOWELS[i % 2 ? 0 : 3]);
+        } else if (kind === 'propeller') {
+          hiss(ac, at, BEAT, 0.08, 180, 160);
+          if (i % 8 === 7) tone(ac, at, 1600, 1.1, 'sine', 0.1, 500);
+        } else if (kind === 'stomp') {
+          tone(ac, at, 70, 0.28, 'sine', 0.5, 40);
+          hiss(ac, at, 0.12, 0.2, 400);
+        } else if (kind === 'swish') {
+          hiss(ac, at, 0.18, 0.3, 1200, 7000);
+          if (i % 2) {
+            tone(ac, at + 0.12, 1250, 0.4, 'triangle', 0.08);
+            tone(ac, at + 0.12, 1880, 0.3, 'triangle', 0.05);
+          }
+        }
       });
     }
   };
@@ -279,6 +469,9 @@
           ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
         });
         ctx.globalAlpha = 1;
+      },
+      count: function () {
+        return list.length;
       }
     };
   }
@@ -347,6 +540,7 @@
         const here = o.lane === g.lane && o.z < RUN_Z + 0.3 && o.z > RUN_Z - 0.6;
         if (o.kind === 'coin' && here && g.jump < 0.6) {
           g.coins++;
+          SFX.coin(g.coins);
           return false;
         }
         return o.z + o.len > 0.5;
@@ -363,7 +557,10 @@
       }
       // Dodge trains by changing lanes; jump barriers.
       const o = ahead(g.lane, 9);
-      if (o && o.kind === 'barrier' && o.z < RUN_Z + 2.6 && g.jumpT < 0) g.jumpT = 0;
+      if (o && o.kind === 'barrier' && o.z < RUN_Z + 2.6 && g.jumpT < 0) {
+        g.jumpT = 0;
+        SFX.hop();
+      }
       if (o && o.kind === 'train') {
         const options = [g.lane - 1, g.lane + 1].filter(function (l) {
           return l >= -1 && l <= 1 && !ahead(l, 11);
@@ -788,6 +985,7 @@
   const CHARACTERS = {
     tung: {
       bg: ['#F4A261', '#6D3B1F'],
+      sound: 'wood',
       draw: function (ctx, t) {
         // A log with a bat, on the beat.
         const swing = Math.sin(t * TAU / BEAT) * 0.5;
@@ -837,6 +1035,7 @@
     },
     tralalero: {
       bg: ['#8ECAE6', '#023E8A'],
+      sound: 'squeak',
       draw: function (ctx, t) {
         // A shark in three pairs of sneakers.
         for (let i = -1; i <= 1; i++) {
@@ -877,6 +1076,7 @@
     },
     cappuccina: {
       bg: ['#FFC8DD', '#7B2CBF'],
+      sound: 'twinkle',
       draw: function (ctx, t) {
         // A cappuccino ballerina, mid-pirouette.
         ctx.scale(0.75 + 0.25 * Math.cos(t * 3.2), 1);
@@ -925,6 +1125,7 @@
     },
     bananini: {
       bg: ['#FFE066', '#2B9348'],
+      sound: 'wa',
       draw: function (ctx, t) {
         // A chimp peeking out of a banana.
         const bob = Math.sin(t * TAU / BEAT) * 8;
@@ -961,6 +1162,7 @@
     },
     crocodilo: {
       bg: ['#A2D2FF', '#1D3557'],
+      sound: 'propeller',
       draw: function (ctx, t) {
         // A crocodile that is also a bomber plane.
         ctx.translate(0, Math.sin(t * 2) * 26);
@@ -995,12 +1197,18 @@
     const name = h('div', 'reel-italian-name', v.name.toUpperCase());
     st.layer.appendChild(name);
     let boomed = false;
+    let beat = -1;
     const clouds = [0, 1, 2, 3].map(function (i) { return { x: i * 190, y: 160 + (i * 137) % 600, s: 0.6 + (i % 3) * 0.3 }; });
     return {
       update: function (dt, t) {
         if (!boomed && t > 0.15) {
           boomed = true;
           SFX.boom();
+        }
+        const b = Math.floor(t / BEAT);
+        if (b !== beat) {
+          beat = b;
+          if (b > 0 && who.sound) SFX.beat(who.sound, b);
         }
         clouds.forEach(function (c) {
           c.x -= dt * 60 * c.s;
@@ -1056,11 +1264,22 @@
     st.layer.appendChild(hud);
     const party = h('div', 'reel-party', 'IT HIT THE CORNER');
     st.layer.appendChild(party);
+    // The logo is a layer of its own, moved by transform: drawing it (and its
+    // text) on the canvas every frame was the slowest part on the TV.
+    const logo = h('div', 'reel-dvd-logo', v.word);
+    st.layer.insertBefore(logo, st.layer.firstChild);
+    let colour = '';
     const fx = sparks();
     let hit = false;
+    let walls = null;
+    let painted = false; // the canvas is plain black between bursts of confetti
+    let confetti = 0;
     return {
       update: function (dt, t) {
         fx.update(dt);
+        const now = Math.floor((ux0 + vx * t) / LX) + Math.floor((uy0 + vy * t) / LY);
+        if (walls !== null && now !== walls && t < v.corner - 0.05) SFX.blip();
+        walls = now;
         if (!hit && t >= v.corner) {
           hit = true;
           hits.textContent = '1';
@@ -1068,26 +1287,27 @@
           fx.burst(W - 20, H - 20, 60, null, 700);
           fx.burst(W / 2, H / 2, 40, null, 600);
           SFX.boom();
+          SFX.cheer();
         }
       },
       draw: function (ctx, t) {
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, W, H);
+        const n = fx.count();
+        if (!painted || n || confetti) {
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, 0, W, H);
+          fx.draw(ctx);
+          painted = true;
+          confetti = n;
+        }
         const ux = ux0 + vx * t;
         const uy = uy0 + vy * t;
-        const x = fold(ux, LX);
-        const y = fold(uy, LY);
         const bounces = Math.floor(ux / LX) + Math.floor(uy / LY);
-        const colour = DVD_COLOURS[((bounces % DVD_COLOURS.length) + DVD_COLOURS.length) % DVD_COLOURS.length];
-        rrect(ctx, x, y, LW, LH, 52);
-        ctx.fillStyle = colour;
-        ctx.fill();
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '700 44px Manrope, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(v.word, x + LW / 2, y + LH / 2 + 2);
-        fx.draw(ctx);
+        const c = DVD_COLOURS[((bounces % DVD_COLOURS.length) + DVD_COLOURS.length) % DVD_COLOURS.length];
+        logo.style.transform = 'translate(' + fold(ux, LX).toFixed(1) + 'px, ' + fold(uy, LY).toFixed(1) + 'px)';
+        if (c !== colour) {
+          colour = c;
+          logo.style.backgroundColor = c;
+        }
       }
     };
   }
@@ -1154,7 +1374,11 @@
     return st;
   }
 
-  // TikTok-style captions: a few words at a time, the spoken one highlighted.
+  // Who reads each kind of video's captions.
+  const VOICE_FOR = { italian: 'italian', sigma: 'deep', sand: 'whisper' };
+
+  // TikTok-style captions: a few words at a time, the spoken one highlighted
+  // and said in the video's voice.
   function updateCaption(st) {
     const found = CH.brainrot.chunkAt(st.video.timeline, st.t);
     const index = found ? found.index : -1;
@@ -1177,6 +1401,7 @@
     found.chunk.words.forEach(function (w, i) { if (st.t >= w.at) word = i; });
     if (word !== st.word) {
       st.word = word;
+      say(found.chunk.words[word].text, VOICE_FOR[st.video.kind] || 'narrator');
       Array.prototype.forEach.call(st.caption.querySelectorAll('.reel-word'), function (el, i) {
         el.classList.toggle('is-on', i === word);
       });
@@ -1359,10 +1584,9 @@
       next(dir);
     },
     setPaused: setPaused,
-    // label: the playing track, or null for 'original sound'; on: sound wanted.
-    setSound: function (label, on) {
+    // label: the playing track, or null for 'original sound'.
+    setSound: function (label) {
       r.soundLabel = label;
-      sfx.on = !!on;
       if (r.cur) r.cur.soundLine.textContent = soundText(r.cur.video);
     },
     state: function () {
@@ -1375,6 +1599,13 @@
         t: st ? st.t : 0,
         duration: st ? st.video.duration : 0
       };
+    },
+    // For reel-more.js, which adds video kinds (scenes) and Italian characters.
+    scenes: SCENES,
+    kit: {
+      W: W, H: H, RES: RES, TAU: TAU, BEAT: BEAT, SFX: SFX, CHARACTERS: CHARACTERS,
+      h: h, icon: icon, rich: rich, avatar: avatar,
+      rrect: rrect, circle: circle, poly: poly, eye: eye, vgrad: vgrad, sparks: sparks
     }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

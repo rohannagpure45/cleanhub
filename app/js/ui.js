@@ -850,14 +850,15 @@
     else if (!st.playing) status = 'Paused';
     amb.title.textContent = musicOn && t ? t.title : '';
     amb.status.textContent = status;
-    amb.controlsTitle.textContent = musicOn && t ? t.title : (reel ? 'Brainrot mode' : 'Ambient');
+    amb.controlsTitle.textContent = musicOn && t ? t.title : (reel ? 'Reels only' : 'Ambient');
     amb.controlsArtist.textContent = musicOn && t ? [t.artist, t.year].filter(Boolean).join(' · ') : status;
     let keys = musicOn && st.count
       ? [['OK', st.playing ? 'Pause' : 'Play'], ['◀ ▶', 'Track'], ['▲ ▼', 'Wallpaper'], ['Back', 'Home']]
       : [['▲ ▼', 'Wallpaper'], ['Back', 'Home']];
     if (reel) {
-      keys = [['OK', reel.paused || (musicOn && st.blocked) ? 'Play' : 'Pause'], ['▲ ▼', 'Scroll']];
-      if (musicOn && st.count) keys.push(['◀ ▶', 'Sound']);
+      keys = [['OK', reel.paused || (musicOn && st.blocked) ? 'Play' : 'Pause'], ['▲ ▼', 'Scroll'],
+        ['◀', musicOn ? 'Music off' : 'Music on']];
+      if (musicOn && st.count) keys.push(['▶', 'Next song']);
       keys.push(['Back', 'Home']);
     }
     fillHint(amb.hint, keys);

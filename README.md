@@ -31,10 +31,13 @@ exactly as they are.
   left to right; glitter, stars and city lights shimmer; Deco's sunburst
   turns. Settings → Wallpaper motion: Off keeps them still.
 - **Brainrot mode.** The last row of Settings turns Ambient into a TikTok-style
-  feed: split-screen stories over an endless runner, a ball escaping rings,
-  aura ratings, Italian brainrot and the logo that might hit the corner, with
-  word-by-word captions, a live comment section and its own phonk. ▲▼ scroll,
-  OK pauses, ◀▶ change the sound, Back goes Home.
+  feed of ten kinds of video: split-screen stories over an endless runner,
+  texting stories over sky parkour, a ball escaping rings, aura ratings,
+  Italian brainrot (seven characters), kinetic sand cutting, a marble race,
+  find-the-odd-one-out, sigma rules and the logo that might hit the corner,
+  with word-by-word captions, a live comment section, its own phonk, and
+  every reel with a sound of its own. ▲▼ scroll, OK pauses, ◀ turns the
+  music off (the reels keep their sound), ▶ skips a song, Back goes Home.
 - **Fire TV on Home.** One press switches the TV to the Fire Stick's HDMI
   input, full screen, in about 0.3 s.
 - **Settings is the button top right.** Press ▶ from the list, or ▲ from the
@@ -149,7 +152,7 @@ app/                the .wgt contents that ship to the TV
                     platform.js: the only file that calls `tizen`
                     ui.js: DOM; main.js: state and remote keys
                     player.js: Ambient's music; walls.js: its moving wallpapers (generated)
-                    brainrot.js: the feed's words; reel.js: its canvas scenes and sounds
+                    brainrot.js: the feed's words; reel.js, reel-more.js: its canvas scenes and sounds
   img/              backgrounds and wallpapers (generated); wall/: the wallpapers' moving layers;
                     apps/: app icons (fetched)
   music/            Ambient's tracks: the originals (playlist.js), a folder and a .js per genre,
@@ -208,16 +211,20 @@ to `CH.genres` in `app/js/options.js` and load `music/<id>.js` in
 ### Brainrot mode
 
 Nothing in the feed is a video file or comes from the internet. Each video is
-drawn live on a canvas (`app/js/reel.js`) at up to 30 fps, and its story, captions,
-handles, counts and comments are put together from word lists in
-`app/js/brainrot.js`, so the feed never runs out. Emoji are small drawings,
-since the TV may have no emoji font. The runner, the characters and the
-sounds are all original; the hits, bounce notes and dings are synthesised with
-Web Audio. The soundtrack is three original loops in `app/music/brainrot/`
-(*Sigma Drift*, drift phonk with a cowbell lead; *Ohio Funk*, Brazilian funk;
-*Aura Bounce*, hyperpop), composed and rendered by
-`python3 scripts/gen-brainrot.py`. Music *Off* makes the feed silent, and the
-brainrot set never plays outside Brainrot mode.
+drawn live on a canvas (`app/js/reel.js`, `app/js/reel-more.js`) at up to 30
+fps, and its story, captions, handles, counts and comments are put together
+from word lists in `app/js/brainrot.js`, so the feed never runs out. Emoji are
+small drawings, since the TV may have no emoji font. Every reel has its own
+sound, synthesised with Web Audio: a made-up narrator voice reads the captions
+word by word (two voices in the texting stories, an announcer for Italian
+brainrot, a deep one for sigma rules, a whisper for the sand), and each scene
+adds its own: coins, bounce notes, knife scrapes, marble clacks, typing,
+stomps, katanas, a horn. The soundtrack is three original loops in
+`app/music/brainrot/` (*Sigma Drift*, drift phonk with a cowbell lead; *Ohio
+Funk*, Brazilian funk; *Aura Bounce*, hyperpop), composed and rendered by
+`python3 scripts/gen-brainrot.py`. ◀ in the feed turns it off and on (it's
+remembered), leaving only the reels' sound, and the brainrot set never plays
+outside Brainrot mode.
 
 ## Licence
 

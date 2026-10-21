@@ -25,6 +25,7 @@
     music: genreIds(), // Ambient's genres, ticked in Settings; [] = no music
     input: 'off', // which HDMI input the Home 'Fire TV' item switches to
     brainrot: 'off', // Ambient shows the brainrot feed instead of the wallpaper
+    brainrotMusic: 'on', // its soundtrack; the reels' own sounds play either way
     apps: null // null = not chosen yet; the home screen picks recognised apps
   };
 

@@ -67,6 +67,12 @@
     brainrot: [
       { id: 'off', name: 'Off' },
       { id: 'on', name: 'On' }
+    ],
+    // Brainrot mode's soundtrack, under the reels' own sound. Switched with ◀
+    // in the feed, so it has no row of its own.
+    brainrotMusic: [
+      { id: 'on', name: 'On' },
+      { id: 'off', name: 'Off' }
     ]
   };
 

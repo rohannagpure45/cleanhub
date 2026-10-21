@@ -688,3 +688,298 @@ html[data-brainrot="on"] #ambient .key {
   color: #FFFFFF;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
 }
+
+/* ---- More videos (reel-more.js) --------------------------------------------- */
+
+.reel-texting .reel-caption {
+  top: 474px;
+  bottom: auto;
+}
+
+.reel-race .reel-caption {
+  bottom: 196px;
+}
+
+.reel-sand .reel-caption {
+  top: 240px;
+  bottom: auto;
+}
+
+.reel-odd .reel-caption {
+  bottom: 196px;
+}
+
+.reel-sigma .reel-caption {
+  bottom: 250px;
+  font-family: 'Fraunces', serif;
+  font-size: 42px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.reel-sigma .reel-word.is-on {
+  color: #FFFFFF;
+}
+
+/* A dark chat card in the top half; new messages push the old ones up. */
+.reel-chat {
+  position: absolute;
+  left: 22px;
+  top: 92px;
+  width: 470px;
+  height: 428px;
+  overflow: hidden;
+  border-radius: 26px;
+  background: #0E0E12;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.reel-chat-head {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  width: 470px;
+  height: 84px;
+  padding: 14px 18px 0;
+  background: #1A1A20;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.reel-chat-back {
+  float: left;
+  width: 26px;
+  font-size: 50px;
+  line-height: 52px;
+  color: #3D9BFF;
+}
+
+.reel-chat-avatar {
+  float: left;
+  width: 52px;
+  height: 52px;
+  margin: 0 14px 0 4px;
+  border-radius: 50%;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 52px;
+  text-align: center;
+  color: #FFFFFF;
+}
+
+.reel-chat-name {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 30px;
+  white-space: nowrap;
+}
+
+.reel-chat-status {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.reel-chat-list {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  width: 438px;
+}
+
+.reel-msg {
+  margin-top: 10px;
+  text-align: left;
+}
+
+.reel-msg.is-me {
+  text-align: right;
+}
+
+.reel-bubble {
+  display: inline-block;
+  max-width: 330px;
+  padding: 11px 18px;
+  border-radius: 24px;
+  background: #2A2A31;
+  font-size: 25px;
+  line-height: 1.25;
+  text-align: left;
+  color: #FFFFFF;
+  animation: reel-bubble 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.reel-msg.is-me .reel-bubble {
+  background: #1E8BFF;
+}
+
+.reel-bubble.is-typing {
+  padding: 18px 20px;
+}
+
+.reel-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin: 0 3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  animation: reel-typing 900ms linear infinite;
+}
+
+.reel-dot + .reel-dot { animation-delay: 150ms; }
+.reel-dot + .reel-dot + .reel-dot { animation-delay: 300ms; }
+
+@keyframes reel-bubble {
+  from { opacity: 0; transform: translateY(20px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes reel-typing {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-6px); }
+}
+
+/* Find the odd one out: a card of letters, one of them different. */
+.reel-odd-card {
+  position: absolute;
+  left: 44px;
+  top: 236px;
+  box-sizing: border-box;
+  width: 440px;
+  padding: 12px 10px;
+  border-radius: 24px;
+  background: #FFFFFF;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-family: 'Space Grotesk', sans-serif;
+  text-align: center;
+}
+
+.reel-odd-cell {
+  display: inline-block;
+  position: relative;
+  width: 60px;
+  height: 56px;
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 56px;
+  color: #1C1C1C;
+  transition: color 300ms linear;
+}
+
+.reel-odd-card.is-revealed .reel-odd-cell {
+  color: #CFCFCF;
+}
+
+.reel-odd-card.is-revealed .reel-odd-cell.is-odd {
+  color: #E03131;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 5px #E03131;
+  animation: reel-found 600ms cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+@keyframes reel-found {
+  from { transform: scale(2.4); }
+  to { transform: scale(1); }
+}
+
+.reel-odd-timer {
+  position: absolute;
+  left: 252px;
+  top: 112px;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: inset 0 0 0 7px #1C1C1C;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 52px;
+  font-weight: 700;
+  line-height: 104px;
+  text-align: center;
+  color: #1C1C1C;
+}
+
+.reel-odd-timer.is-low {
+  color: #E03131;
+  box-shadow: inset 0 0 0 7px #E03131;
+}
+
+.reel-race-hud .reel-hud-big {
+  font-size: 64px;
+  text-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
+}
+
+.reel-sigma-title {
+  position: absolute;
+  left: 0;
+  top: 112px;
+  width: 608px;
+  text-align: center;
+  font-family: 'Fraunces', serif;
+  font-size: 54px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #F2F2F2;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.8);
+}
+
+/* Sigma edit's film grain: a static noise tile that jumps about, moved by the
+   compositor rather than redrawn. */
+.reel-grain {
+  position: absolute;
+  left: -64px;
+  top: -64px;
+  width: 736px;
+  height: 1208px;
+  opacity: 0.2;
+  background-size: 128px 128px;
+  animation: reel-grain 360ms steps(1) infinite;
+}
+
+.reel.is-paused .reel-grain {
+  animation-play-state: paused;
+}
+
+@keyframes reel-grain {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-37px, 21px); }
+  50% { transform: translate(19px, -43px); }
+  75% { transform: translate(-11px, 53px); }
+}
+
+/* The bouncing logo: a layer of its own, moved by transform each frame. */
+.reel-dvd-logo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 236px;
+  height: 104px;
+  border-radius: 52px;
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 106px;
+  text-align: center;
+  color: #FFFFFF;
+  will-change: transform;
+}
+
+.reel-race-rank {
+  position: absolute;
+  width: 40px;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  color: #FFFFFF;
+}
+
+/* Sigma edit's white flash on the beat (JS sets its opacity). */
+.reel-flash {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 608px;
+  height: 1080px;
+  background: #FFFFFF;
+  opacity: 0;
+  will-change: opacity;
+}

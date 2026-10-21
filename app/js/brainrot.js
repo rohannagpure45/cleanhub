@@ -65,7 +65,9 @@
     title: [
       'AITA for {verb} my {who}’s {thing}?',
       'AITA for telling my {who} they have zero {stat}?',
-      'WIBTA if I left {place} because my {who} said “{phrase}”?'
+      'WIBTA if I left {place} because my {who} said “{phrase}”?',
+      'AITA for bringing my {who} to {place} as my plus one?',
+      'AITA for {verb} my {who} in front of the whole group chat?'
     ],
     open: 'So my {who} has been mewing for {num} days straight.',
     middle: [
@@ -76,11 +78,55 @@
       'Now the whole group chat says I’m {insult}.',
       'Mind you, this was in {place}.',
       'They said I have negative {stat}. Negative.',
-      'I said “{phrase}” and walked out.'
+      'I said “{phrase}” and walked out.',
+      'For context, they had been yapping about {stat} all week.',
+      'Then they looked me dead in the eye and started mewing.',
+      'Their aura went from 100 to negative in one sentence.',
+      'Everyone at {place} saw it. EVERYONE.'
     ],
     close: ['So AITA? Or are they just {insult}?', 'Edit: they are mewing at me right now :skull:',
-      'Update: we are both {insult} :sob:']
+      'Update: we are both {insult} :sob:', 'Update: they changed the wifi password to “{phrase}”.']
   };
+
+  // Texting stories: who sends each message, 'me' or 'them'.
+  const CHATS = [
+    { hook: 'texting my crush using only brainrot :skull:', contact: 'crush', lines: [
+      ['me', 'hey pookie'], ['them', 'who is this'], ['me', 'the rizzler'], ['them', '??'],
+      ['me', 'you’re the skibidi to my toilet'], ['them', 'blocked'], ['me', 'chat is this real'], ['them', '-1000 aura']] },
+    { hook: 'texting my mom in gen alpha :sob:', contact: 'Mom', lines: [
+      ['me', 'can you fanum tax me some fries'], ['them', 'what'], ['me', 'my aura is in the negatives'],
+      ['them', 'are you feeling ok'], ['me', 'no cap fr fr'], ['them', 'where is your cap it’s 40 degrees out'],
+      ['me', 'bro is cooked'], ['them', 'I AM YOUR MOTHER']] },
+    { hook: 'asking my teacher for an extension :moai:', contact: 'Math teacher', lines: [
+      ['me', 'can I get an extension'], ['them', 'reason?'], ['me', 'my mewing streak is on day {num}'],
+      ['them', 'absolutely not'], ['me', 'that’s not very sigma of you'], ['them', 'see me after class'],
+      ['me', 'erm what the sigma'], ['them', 'detention.']] },
+    { hook: 'someone fanum taxed the group chat :fire:', contact: 'the sigmas (6)', lines: [
+      ['them', 'who ate my fries'], ['me', 'not me'], ['them', 'your mewing face says otherwise'], ['me', 'skibidi'],
+      ['them', 'bro is the Ohio final boss'], ['me', 'six seven'], ['them', 'i’m leaving'], ['me', 'W']] },
+    { hook: 'texting my {who} at 3am :skull:', contact: '{who}', lines: [
+      ['me', 'u up'], ['them', 'it’s 3am'], ['me', 'i just hit day {num} of mewing'], ['them', 'and?'],
+      ['me', 'thought you should know'], ['them', 'goodnight'], ['me', 'aura check?'], ['them', 'negative']] }
+  ];
+
+  // Kinetic sand: band colours top to bottom.
+  const SAND = [
+    ['#F7A8C4', '#C3A6F2', '#8FD3F4', '#A8E6CF'],
+    ['#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF'],
+    ['#FFADAD', '#FFC6FF', '#BDB2FF', '#A0C4FF'],
+    ['#F9C74F', '#F9844A', '#F94144', '#90BE6D']
+  ];
+
+  const RACERS = [['RED', '#FF3B30'], ['BLUE', '#0A84FF'], ['GREEN', '#30D158'], ['YELLOW', '#FFD60A'],
+    ['PURPLE', '#BF5AF2'], ['ORANGE', '#FF9F0A']];
+
+  // Find the odd one out: lots of the first, one of the second.
+  const ODD = [['O', 'Q'], ['6', '9'], ['b', 'd'], ['E', 'F'], ['8', 'B'], ['M', 'N'], ['5', 'S']];
+
+  const SIGMA = ['never let them know your next move', 'if she says “k” you say “k.”', 'always mew in the group photo',
+    'never reply in under three hours', 'eat the last nugget, then leave', 'walk away from every explosion',
+    'sit at the back of the bus. alone.', 'never explain your aura', 'the grind does not stop for Ohio',
+    'say six seven to no one in particular'];
 
   const AURA = [
     ['mewing during the fire drill', 1500],
@@ -100,7 +146,13 @@
     ['saying six seven in class', 67],
     ['leaving the group chat on read', 600],
     ['catching your phone mid-fall', 2000],
-    ['your mic was on the whole time', -3000]
+    ['your mic was on the whole time', -3000],
+    ['the automatic door didn’t open for you', -900],
+    ['guessing the wifi password first try', 1800],
+    ['clapping when the plane lands', -600],
+    ['finding the odd one out in 2 seconds', 1000],
+    ['typing “lol” with a straight face', -200],
+    ['your mom liking your post', -1200]
   ];
 
   // Italian brainrot. Each `id` is a character reel.js knows how to draw.
@@ -109,7 +161,9 @@
     { id: 'tralalero', name: 'Tralalero Tralala', chant: 'tralalero tralala, a shark with three pairs of sneakers' },
     { id: 'cappuccina', name: 'Ballerina Cappuccina', chant: 'ballerina cappuccina, mi mi mi mi mi' },
     { id: 'bananini', name: 'Chimpanzini Bananini', chant: 'chimpanzini bananini, wa wa wa wa' },
-    { id: 'crocodilo', name: 'Bombardiro Crocodilo', chant: 'bombardiro crocodilo, flying over the cafeteria' }
+    { id: 'crocodilo', name: 'Bombardiro Crocodilo', chant: 'bombardiro crocodilo, flying over the cafeteria' },
+    { id: 'patapim', name: 'Brr Brr Patapim', chant: 'brr brr patapim, brr brr patapim, a tree with big feet' },
+    { id: 'assassino', name: 'Cappuccino Assassino', chant: 'cappuccino assassino, ta ta ta ta, two katanas' }
   ];
 
   const COMMENTS = [
@@ -118,11 +172,14 @@
     'the aura on this one :fire:', 'POV: {place}', 'nah this is crazy', 'my brain is cooked', 'bro got fanum taxed',
     'this gave me {num} aura', 'L {who}', 'average {place} moment', 'ok but the {thing}?', 'six seven :skull:',
     'erm what the sigma', 'i need the sound', 'part 2 pls', 'algorithm brought me here', 'teacher said no phones :skull:',
-    'the {who} is {insult} :skull:', 'replayed {num} times'
+    'the {who} is {insult} :skull:', 'replayed {num} times', 'GREEN ALWAYS WINS', 'found it in 2 seconds',
+    'the sand cut :sob::sob:', 'bro texted his mom :skull:', 'sigma rule #1: never comment', 'not the parkour :fire:',
+    'i put RED and lost my aura', 'the knife sound :sob:', 'this is my roman empire'
   ];
 
-  // Order of video kinds down the feed; the story (split screen) comes round twice.
-  const KINDS = ['story', 'bounce', 'aura', 'italian', 'story', 'dvd'];
+  // Order of video kinds down the feed; the split screens come round twice.
+  const KINDS = ['story', 'bounce', 'texting', 'aura', 'italian', 'sand', 'odd', 'story', 'race', 'sigma',
+    'texting', 'dvd'];
 
   const WORD_S = 0.34; // caption pace, seconds per word
   const AURA_S = 3.2; // each aura rating stays this long
@@ -145,14 +202,18 @@
   }
 
   // Lines become timed words, shown a few at a time like TikTok captions.
-  // Each line runs `dur` seconds (default: its words at WORD_S each).
+  // Each line runs `dur` seconds (default: its words at WORD_S each); a line
+  // with no words is a pause of `dur`.
   // Returns { chunks: [{ words: [{ text, at }], end }], end }.
   function timeline(lines, start) {
     const chunks = [];
     let at = start || 0;
     lines.forEach(function (line) {
       const words = String(line.text).split(/\s+/).filter(Boolean);
-      if (!words.length) return;
+      if (!words.length) {
+        at += line.dur || 0;
+        return;
+      }
       const per = line.dur ? line.dur / words.length : WORD_S;
       const size = line.dur ? words.length : 3; // timed lines (aura) show whole
       for (let i = 0; i < words.length; i += size) {
@@ -228,7 +289,80 @@
     };
   }
 
-  const MAKE = { story: story, bounce: bounce, aura: aura, italian: italian, dvd: dvd };
+  // A chat that plays out over parkour: messages arrive one by one, the
+  // other side 'typing…' first.
+  function texting(rnd, v) {
+    const chat = pick(rnd, CHATS);
+    const messages = [];
+    let at = 3.2;
+    chat.lines.forEach(function (line) {
+      const text = fill(line[1], v);
+      if (line[0] === 'them') at += 0.9; // time to type
+      messages.push({ from: line[0], text: text, at: at });
+      at += 1.1 + text.length * 0.035;
+    });
+    return {
+      title: fill(chat.hook, v),
+      contact: fill(chat.contact, v),
+      messages: messages,
+      timeline: timeline([{ text: fill(chat.hook, v), dur: 2.6 }], 0.3),
+      duration: at + 2
+    };
+  }
+
+  function sand(rnd) {
+    const lines = ['turn your sound on', 'kinetic sand cutting', 'the last cut is so satisfying', 'which slice was the best?'];
+    return {
+      title: 'kinetic sand ASMR :fire:',
+      colours: pick(rnd, SAND),
+      cut: 1.6, // seconds per slice
+      timeline: timeline(lines.map(function (l) { return { text: l, dur: 3.4 }; }), 0.4),
+      duration: 16
+    };
+  }
+
+  function race(rnd) {
+    const lines = ['comment your color', 'which one wins?'];
+    return {
+      title: 'which color wins? :fire:',
+      racers: RACERS.map(function (r) { return { name: r[0], colour: r[1] }; }),
+      timeline: timeline(lines.map(function (l) { return { text: l, dur: 3 }; }), 0.4),
+      duration: 17
+    };
+  }
+
+  function odd(rnd) {
+    const pair = pick(rnd, ODD);
+    const cols = 7;
+    const rows = 9;
+    const lines = [{ text: 'only 1% can find the odd one out', dur: 3 }, { text: 'you have 10 seconds', dur: 2.6 },
+      { text: '', dur: 6.4 }, { text: 'did you find it? :skull:', dur: 3 }];
+    return {
+      title: 'only 1% can find it :skull:',
+      pair: pair,
+      cols: cols,
+      rows: rows,
+      odd: Math.floor(rnd() * cols * rows),
+      start: 1.5, // the countdown runs from here for ten seconds
+      timeline: timeline(lines, 0.3),
+      duration: 16
+    };
+  }
+
+  function sigma(rnd) {
+    const rule = pick(rnd, SIGMA);
+    const n = 1 + Math.floor(rnd() * 99);
+    const lines = [{ text: '', dur: 1.6 }, { text: rule, dur: Math.max(4, rule.split(' ').length * 0.6) }];
+    return {
+      title: 'sigma rule #' + n + ' :moai:',
+      rule: n,
+      timeline: timeline(lines, 0.4),
+      duration: 13
+    };
+  }
+
+  const MAKE = { story: story, bounce: bounce, aura: aura, italian: italian, dvd: dvd, texting: texting, sand: sand,
+    race: race, odd: odd, sigma: sigma };
 
   // The n-th video of the feed started with `seed`.
   function video(seed, n) {

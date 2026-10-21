@@ -105,13 +105,13 @@ test('with Brainrot mode on, Ambient is a TikTok-style feed with its own soundtr
   assert.deepEqual(errors, []);
 });
 
-test('▲▼ scroll the feed; OK pauses the feed and its music together; ◀▶ change the sound', async () => {
+test('▲▼ scroll the feed; OK pauses the feed and its music together; ▶ skips a song', async () => {
   await openFeed();
   await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
   await press('ArrowDown');
   assert.deepEqual([(await app()).reel.n, (await app()).reel.kind], [1, 'bounce']);
   await press('ArrowDown');
-  assert.equal((await app()).reel.kind, 'aura');
+  assert.equal((await app()).reel.kind, 'texting');
   await press('ArrowUp');
   assert.equal((await app()).reel.n, 1);
   await page.waitForTimeout(600); // the old video has slid away
@@ -173,15 +173,75 @@ test('the feed stops while the TV hides the app and carries on after', async () 
   await page.waitForFunction((t0) => window.CleanHub.reel.state().t > t0, t, { timeout: 3000 });
 });
 
-test('with Music off the feed is silent, and its hint has no sound key', async () => {
-  await openFeed(S({ music: 'off' }));
-  await page.waitForTimeout(300);
-  const a = await app();
-  assert.equal(a.reel.running, true);
-  assert.equal(a.player.count, 0);
+// Counts the sounds the reels make, by watching what Web Audio is asked to play.
+async function countSounds() {
+  await page.addInitScript(() => {
+    const AC = window.AudioContext;
+    window.__sounds = 0;
+    window.AudioContext = function () {
+      const c = new AC();
+      const osc = c.createOscillator.bind(c);
+      const buf = c.createBufferSource.bind(c);
+      c.createOscillator = function () { window.__sounds++; return osc(); };
+      c.createBufferSource = function () { window.__sounds++; return buf(); };
+      return c;
+    };
+  });
+}
+
+test('◀ turns the music off and on; the reels keep their own sound; the choice is kept', async () => {
+  await countSounds();
+  await openFeed();
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  assert.match(await hint(), /◀Music off/);
+  await press('ArrowLeft');
+  let a = await app();
+  assert.equal(a.settings.brainrotMusic, 'off');
+  assert.equal(a.player.count, 0, 'no soundtrack queued');
   assert.equal(a.player.wanted, false);
-  assert.doesNotMatch(await hint(), /Sound/);
+  assert.equal(a.reel.running, true);
+  assert.equal(a.reel.paused, false);
+  assert.match(await hint(), /◀Music on/);
+  assert.doesNotMatch(await hint(), /Next song/);
   assert.match(await page.$eval('#ambient .reel-marquee-text', (e) => e.textContent), /original sound/);
+  const before = await page.evaluate(() => window.__sounds);
+  await page.waitForTimeout(2500);
+  const made = (await page.evaluate(() => window.__sounds)) - before;
+  assert.ok(made > 4, `the reel kept making its own sounds (${made})`);
+  await page.reload();
+  await page.waitForFunction(() => window.CleanHub.main.state.fresh);
+  a = await app();
+  assert.equal(a.settings.brainrotMusic, 'off', 'kept across a restart');
+  assert.equal(a.player.wanted, false);
+  await press('ArrowLeft');
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  a = await app();
+  assert.equal(a.settings.brainrotMusic, 'on');
+  assert.equal(a.player.set, 'brainrot');
+  assert.deepEqual(errors, []);
+});
+
+test('Ambient’s own Music setting doesn’t silence Brainrot mode', async () => {
+  await openFeed(S({ music: 'off' }));
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  assert.equal((await app()).player.set, 'brainrot');
+});
+
+test('every reel speaks its captions and makes its own sounds, with no music', async () => {
+  await countSounds();
+  await page.clock.install();
+  await openFeed(S({ brainrotMusic: 'off' }));
+  const kinds = await page.evaluate(() => window.CleanHub.brainrot.KINDS.length);
+  const quiet = [];
+  for (let i = 0; i < kinds; i++) {
+    const kind = (await app()).reel.kind;
+    const before = await page.evaluate(() => window.__sounds);
+    for (let k = 0; k < 16; k++) await page.clock.runFor(500);
+    if ((await page.evaluate(() => window.__sounds)) - before < 5) quiet.push(kind);
+    await press('ArrowDown');
+  }
+  assert.deepEqual(quiet, [], 'reels without their own sound');
+  assert.equal((await app()).player.wanted, false, 'and no music');
 });
 
 test('with Brainrot mode off, Ambient is the usual wallpaper and never plays the brainrot set', async () => {
@@ -208,5 +268,42 @@ test('the feed comes back by itself after a restart (TV switched off on it)', as
   const a = await app();
   assert.equal(a.screen, 'ambient');
   assert.equal(a.reel.running, true);
+  assert.deepEqual(errors, []);
+});
+
+test('every kind of video draws without errors, and each new one does its thing', async () => {
+  await page.clock.install();
+  await openFeed(S({ music: 'off' }));
+  // What each kind shows, checked every half second of its first 13 s. A
+  // 13 s video (sigma) may already have given way to the next one by the last
+  // look, so a missing element reads as null rather than throwing.
+  const look = (k) => page.evaluate((kind) => {
+    const q = (sel) => document.querySelector('#ambient .reel-stage ' + sel);
+    const text = (sel) => (q(sel) ? q(sel).textContent : null);
+    if (kind === 'texting') return document.querySelectorAll('#ambient .reel-stage .reel-bubble:not(.is-typing)').length;
+    if (kind === 'odd') return !!q('.reel-odd-cell.is-odd');
+    if (kind === 'race') return text('.reel-race-hud .reel-hud-big');
+    if (kind === 'sigma') return text('.reel-sigma-title');
+    return kind;
+  }, k);
+  const seen = {};
+  const kinds = await page.evaluate(() => window.CleanHub.brainrot.KINDS.length);
+  for (let i = 0; i < kinds; i++) {
+    const kind = (await app()).reel.kind;
+    const sights = [];
+    for (let step = 0; step < 26; step++) {
+      await page.clock.runFor(500);
+      sights.push(await look(kind));
+    }
+    seen[kind] = sights;
+    await press('ArrowDown');
+  }
+  assert.deepEqual(Object.keys(seen).sort(), ['aura', 'bounce', 'dvd', 'italian', 'odd', 'race', 'sand', 'sigma', 'story', 'texting']);
+  assert.ok(Math.max(...seen.texting) >= 4, `messages arrived: ${seen.texting}`);
+  assert.equal(seen.odd[0], false, 'hidden during the countdown');
+  assert.ok(seen.odd.includes(true), 'the odd one is revealed after it');
+  assert.ok(['3', '2', '1'].includes(seen.race[0]) && seen.race.includes('GO!'), 'a countdown, then go');
+  assert.ok(seen.race.some((s) => /WINS!$/.test(s)), seen.race.join(','));
+  assert.match(seen.sigma[0], /^SIGMA RULE #\d+$/);
   assert.deepEqual(errors, []);
 });
