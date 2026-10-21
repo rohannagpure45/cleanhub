@@ -2,7 +2,8 @@
 // loop through one <audio> element (Samsung's documented pattern: switch src
 // on 'ended'). It runs all day, so every way it can stop is handled: a track
 // that won't play is skipped, a stall is caught by a watchdog, and once no
-// track will play it stops trying.
+// track will play it stops trying. Shuffled, it plays the list in a random
+// order, and a new one each time round.
 (function (root) {
   'use strict';
   const CH = root.CleanHub = root.CleanHub || {};
@@ -10,15 +11,38 @@
   const p = {
     list: [],
     index: 0,
+    shuffle: false,
     audio: null,
     wanted: false, // the viewer wants music (survives the app being hidden)
     blocked: false, // the browser refused to start without a key press
-    failed: {}, // indexes of tracks that wouldn't play since one last did
+    failed: {}, // files of tracks that wouldn't play since one last did
     onChange: null,
     retry: null,
     watch: null,
     lastTime: -1
   };
+
+  // A random order of `list` (Fisher–Yates). `lead`, if given, goes first;
+  // otherwise `avoid` (the track that just ended) doesn't, so a new pass
+  // never repeats it.
+  function shuffled(list, lead, avoid, random) {
+    const out = list.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      const t = out[i];
+      out[i] = out[j];
+      out[j] = t;
+    }
+    if (lead) {
+      out.splice(out.indexOf(lead), 1);
+      out.unshift(lead);
+    } else if (avoid && out.length > 1 && out[0].file === avoid.file) {
+      const j = 1 + Math.floor(random() * (out.length - 1));
+      out[0] = out[j];
+      out[j] = avoid;
+    }
+    return out;
+  }
 
   const WATCH_MS = 30000;
   const SKIP_MS = 1500;
@@ -85,7 +109,7 @@
     // A file that won't play is skipped; once none will, stop trying.
     a.addEventListener('error', function () {
       const failedIndex = p.index;
-      p.failed[failedIndex] = true;
+      p.failed[p.list[failedIndex].file] = true; // by file: a new shuffle moves indexes
       notify();
       if (!broken() && p.wanted) {
         root.clearTimeout(p.retry);
@@ -135,7 +159,12 @@
 
   function step(dir) {
     if (!p.list.length) return;
-    load(p.index + dir);
+    if (p.shuffle && dir > 0 && p.index === p.list.length - 1 && p.list.length > 1) {
+      p.list = shuffled(p.list, null, p.list[p.index], Math.random); // round again, in a new order
+      load(0);
+    } else {
+      load(p.index + dir);
+    }
     if (p.wanted) play();
   }
 
@@ -151,7 +180,8 @@
 
   CH.player = {
     // Also used to switch playlists: drops the old track so play() loads anew.
-    init: function (list, startIndex, onChange) {
+    // startIndex: the track to start on, or -1 for the top (shuffled: any).
+    init: function (list, startIndex, onChange, shuffle) {
       root.clearTimeout(p.retry);
       root.clearTimeout(p.watch);
       p.failed = {};
@@ -160,10 +190,18 @@
         p.audio.removeAttribute('src');
         p.audio.load();
       }
-      p.list = Array.isArray(list) ? list.filter(function (t) { return t && t.file; }) : [];
-      p.index = p.list.length ? Math.max(0, Math.min(p.list.length - 1, startIndex || 0)) : 0;
+      const tracks = Array.isArray(list) ? list.filter(function (t) { return t && t.file; }) : [];
+      p.shuffle = !!shuffle;
+      if (p.shuffle) {
+        p.list = shuffled(tracks, tracks[startIndex] || null, null, Math.random);
+        p.index = 0;
+      } else {
+        p.list = tracks;
+        p.index = tracks.length ? Math.max(0, Math.min(tracks.length - 1, startIndex || 0)) : 0;
+      }
       p.onChange = onChange;
     },
+    shuffled: shuffled,
     play: play,
     pause: pause,
     // Same test as the on-screen hint: OK on 'Play' plays, on 'Pause' pauses.

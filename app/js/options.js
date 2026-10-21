@@ -38,18 +38,22 @@
       { id: 'on', name: 'Shown' },
       { id: 'off', name: 'Hidden' }
     ],
-    // 'dark' ones are almost all black (low power on a local-dimming TV);
-    // scenes are full colour; Rotate shows the scenes in turn.
+    // 'dark' ones are almost all black (low power on a local-dimming TV),
+    // from Lamp to night scenes lit by one light; scenes are full colour;
+    // Rotate shows the scenes in turn.
     wallpaper: [
       { id: 'lamp', name: 'Lamp', kind: 'dark' },
       { id: 'midnight', name: 'Midnight', kind: 'dark' },
+      { id: 'streetlamp', name: 'Street Lamp', kind: 'dark' },
+      { id: 'moonrise', name: 'Moonrise', kind: 'dark' },
+      { id: 'lighthouse', name: 'Lighthouse', kind: 'dark' },
+      { id: 'fireflies', name: 'Fireflies', kind: 'dark' },
       { id: 'black', name: 'Black', kind: 'dark' },
       { id: 'sunset', name: 'Sunset', kind: 'scene' },
       { id: 'coast', name: 'Coast', kind: 'scene' },
       { id: 'dunes', name: 'Dunes', kind: 'scene' },
       { id: 'aurora', name: 'Aurora', kind: 'scene' },
       { id: 'rain', name: 'City Rain', kind: 'scene' },
-      { id: 'deco', name: 'Deco', kind: 'scene' },
       { id: 'rotate', name: 'Rotate', kind: 'rotate' }
     ],
     // Moving layers (js/walls.js), or the still pictures.
@@ -87,6 +91,12 @@
     brainrotMusic: [
       { id: 'on', name: 'On' },
       { id: 'off', name: 'Off' }
+    ],
+    // Ambient music's order: a new random one each time round, or the
+    // genres' own. Ticked in the Ambient music sheet, so no row of its own.
+    shuffle: [
+      { id: 'on', name: 'On' },
+      { id: 'off', name: 'Off' }
     ]
   };
 
@@ -97,7 +107,7 @@
   CH.genres = [
     { id: 'originals', name: 'Originals', note: 'Clean Hub Trio jazz' },
     { id: 'vintage', name: '1920s', note: 'Dance bands and blues, 1919–25' },
-    { id: 'classical', name: 'Classical', note: 'Grieg, Vivaldi, Haydn, Dvořák' },
+    { id: 'classical', name: 'Classical', note: 'Bach, Vivaldi, Mozart, Grieg, Dvořák' },
     { id: 'piano', name: 'Piano', note: 'Satie, Chopin, Bach, Beethoven' },
     { id: 'ragtime', name: 'Ragtime', note: 'Joplin and friends' },
     { id: 'bigband', name: 'Big band', note: 'Airmen of Note, 1920s orchestras' },

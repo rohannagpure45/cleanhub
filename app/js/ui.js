@@ -471,28 +471,39 @@
     focusSheet(focusIndex, true);
   }
 
-  function musicHint(genres, chosen, focusIndex) {
-    const on = chosen.indexOf(genres[focusIndex].id) !== -1;
+  // The focused row is a genre, or past the genres, Shuffle.
+  function musicHint(genres, chosen, focusIndex, shuffle) {
+    const on = focusIndex < genres.length ? chosen.indexOf(genres[focusIndex].id) !== -1 : shuffle;
     return [['OK', on ? 'Turn off' : 'Turn on'], ['Back', 'Settings']];
   }
 
   // Focus moved in the music sheet: only the hint line depends on it.
-  function updateMusicHint(genres, chosen, focusIndex) {
-    if (sheet.hint) fillHint(sheet.hint, musicHint(genres, chosen, focusIndex));
+  function updateMusicHint(genres, chosen, focusIndex, shuffle) {
+    if (sheet.hint) fillHint(sheet.hint, musicHint(genres, chosen, focusIndex, shuffle));
   }
 
-  // The Ambient music checklist. genres: CH.genres; chosen: the ticked ids.
-  function renderMusicSheet(genres, chosen, focusIndex) {
-    sheetFrame('Ambient music', chosen.length ? 'Playing ' + chosen.length + ' of ' + genres.length : 'Music off',
-      musicHint(genres, chosen, focusIndex));
+  function checkRow(attr, value, label, note, on) {
+    const row = h('div', 'sheet-row' + (on ? ' is-on' : ''));
+    row.setAttribute(attr, value);
+    row.appendChild(svg('check check-box', ICONS.check));
+    row.appendChild(h('span', 'sheet-label', label));
+    row.appendChild(h('span', 'sheet-note', note));
+    return row;
+  }
+
+  // The Ambient music checklist: a row per genre (genres: CH.genres; chosen:
+  // the ticked ids), then Shuffle.
+  function renderMusicSheet(genres, chosen, focusIndex, shuffle) {
+    const sub = chosen.length
+      ? 'Playing ' + chosen.length + ' of ' + genres.length + (shuffle ? ', shuffled' : ', in order')
+      : 'Music off';
+    sheetFrame('Ambient music', sub, musicHint(genres, chosen, focusIndex, shuffle));
     genres.forEach(function (g, i) {
-      const row = h('div', 'sheet-row' + (chosen.indexOf(g.id) !== -1 ? ' is-on' : ''));
-      row.setAttribute('data-genre', g.id);
-      row.appendChild(svg('check check-box', ICONS.check));
-      row.appendChild(h('span', 'sheet-label', g.name));
-      row.appendChild(h('span', 'sheet-note', g.note));
-      addRow(row, i === focusIndex);
+      addRow(checkRow('data-genre', g.id, g.name, g.note, chosen.indexOf(g.id) !== -1), i === focusIndex);
     });
+    sheet.track.appendChild(h('div', 'sheet-section', 'Order'));
+    addRow(checkRow('data-shuffle', '', 'Shuffle', shuffle ? 'A new order each time round' : 'Genres in list order', shuffle),
+      focusIndex === genres.length);
     alignGlass(sheet.el);
     focusSheet(focusIndex, true);
   }
@@ -587,13 +598,20 @@
     if (el.offsetTop - margin < offset) offset = el.offsetTop - margin;
     if (el.offsetTop + el.offsetHeight + margin > offset + view) offset = el.offsetTop + el.offsetHeight + margin - view;
     offset = Math.max(0, Math.min(max, offset));
+    // Snap to the top of a row or section at or above that. Near the end of a
+    // list, less than a row from the bottom, that can leave the focused row
+    // cut off below; then snap to the first one that shows it whole instead.
+    const fits = el.offsetTop + el.offsetHeight - view;
     let snapped = 0;
+    let below = Infinity;
     const kids = sheet.track.children;
     for (let i = 0; i < kids.length; i++) {
       const top = kids[i].offsetTop;
-      if (kids[i] !== sheet.pill && top <= offset + 0.5 && top > snapped) snapped = top;
+      if (kids[i] === sheet.pill) continue;
+      if (top <= offset + 0.5 && top > snapped) snapped = top;
+      if (top >= fits - 0.5 && top < below) below = top;
     }
-    return snapped;
+    return snapped >= fits - 0.5 || below === Infinity ? snapped : below;
   }
 
   function focusSheet(index, instant) {
@@ -698,9 +716,11 @@
   // a short wait, so a slow or missing file never holds the change up).
   function decodeWall(id, moving, done) {
     const layers = wallLayers(id, moving);
-    const srcs = layers
-      ? layers.filter(function (l) { return l.src; }).map(function (l) { return l.src; })
-      : (id === 'black' ? [] : ['img/ambient-' + id + '.jpg']);
+    const srcs = layers ? [] : (id === 'black' ? [] : ['img/ambient-' + id + '.jpg']);
+    (layers || []).forEach(function (l) {
+      if (l.src) srcs.push(l.src);
+      if (l.box && l.box.maskSrc) srcs.push(l.box.maskSrc);
+    });
     let left = srcs.length;
     let called = false;
     const finish = function () {
@@ -739,17 +759,17 @@
   }
 
   // One layer of a moving wallpaper: a picture with a CSS animation (maybe
-  // clipped or masked by a box, or seen through a moving sheen), or an
-  // effect drawn by CSS alone.
+  // clipped or masked by a box), or an effect drawn by CSS alone.
   function wallLayer(l) {
     if (l.kind === 'drops') {
       const drops = h('div', 'wall-drops');
       l.drops.forEach(function (d) {
         const drop = h('div', 'wall-drop');
         drop.style.left = d.x + 'px';
+        drop.style.top = (d.y || 0) + 'px';
         drop.style.width = Math.round(10 * d.size) + 'px';
         drop.style.height = Math.round(120 * d.size) + 'px';
-        drop.style.animation = 'wall-fall ' + d.dur + 's cubic-bezier(0.5, 0, 0.8, 1) ' + (-d.delay) + 's infinite';
+        drop.style.animation = 'wall-fall ' + d.dur + 's linear ' + (-d.delay) + 's infinite';
         drops.appendChild(drop);
       });
       return drops;
@@ -769,24 +789,25 @@
     pic.style.backgroundImage = 'url(' + l.src + ')';
     if (l.anim) pic.style.animation = l.anim;
     if (l.origin) pic.style.transformOrigin = l.origin;
-    if (l.sheen) {
-      // A soft band sweeps across while the picture inside it moves the other
-      // way just as fast: the picture stays put and only the band moves.
-      const band = h('div', 'wall-sheen');
-      band.style.animationDuration = l.sheen + 's';
-      pic.className = 'wall-layer wall-sheen-pic';
-      pic.style.animationDuration = l.sheen + 's';
-      band.appendChild(pic);
-      return band;
-    }
     if (!l.box) return pic;
     const box = h('div', 'wall-box');
     setBox(box, l.box);
-    if (l.box.mask) {
-      box.style.webkitMaskImage = l.box.mask;
-      box.style.maskImage = l.box.mask;
+    const mask = l.box.maskSrc ? 'url(' + l.box.maskSrc + ')' : l.box.mask;
+    if (mask) {
+      box.style.webkitMaskImage = mask;
+      box.style.maskImage = mask;
     }
-    box.appendChild(pic);
+    if (l.tilt) {
+      // A drift along a slope: the picture slides inside a turned frame,
+      // while the box around it stays square to the screen.
+      const tilt = h('div', 'wall-tilt');
+      setBox(tilt, { x: 0, y: 0, w: l.box.w, h: l.box.h });
+      tilt.style.transform = 'rotate(' + l.tilt + 'deg)';
+      tilt.appendChild(pic);
+      box.appendChild(tilt);
+    } else {
+      box.appendChild(pic);
+    }
     return box;
   }
 

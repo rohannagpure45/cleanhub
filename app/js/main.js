@@ -280,7 +280,8 @@
     save();
     CH.ui.applyLook(next);
     if (relayout) renderHome(remembered ? remembered.id : null);
-    if (next.music.join() !== prev.music.join() || next.brainrot !== prev.brainrot || next.brainrotMusic !== prev.brainrotMusic) changeMusic();
+    if (next.music.join() !== prev.music.join() || next.shuffle !== prev.shuffle ||
+      next.brainrot !== prev.brainrot || next.brainrotMusic !== prev.brainrotMusic) changeMusic();
     if (next.input !== prev.input) cancelSwitch();
     if (next.wallpaper !== prev.wallpaper || next.motion !== prev.motion) {
       CH.ui.showWall(wallNow(), state.screen !== 'ambient', wallMoves());
@@ -500,10 +501,10 @@
 
   // ---- Ambient music -------------------------------------------------------------
 
-  // A checklist of genres: OK ticks or unticks the focused one, and Ambient
-  // plays every ticked genre (none: no music).
+  // A checklist of genres, then Shuffle: OK ticks or unticks the focused row,
+  // and Ambient plays every ticked genre (none: no music).
   function renderMusic() {
-    CH.ui.renderMusicSheet(CH.genres, state.settings.music, state.musicIndex);
+    CH.ui.renderMusicSheet(CH.genres, state.settings.music, state.musicIndex, state.settings.shuffle === 'on');
   }
 
   function openMusic() {
@@ -519,16 +520,17 @@
       return;
     }
     if (key === 'up' || key === 'down') {
-      const next = CH.focus.step(state.musicIndex, CH.genres.length, key === 'down' ? 1 : -1);
+      const next = CH.focus.step(state.musicIndex, CH.genres.length + 1, key === 'down' ? 1 : -1);
       if (next !== state.musicIndex) {
         state.musicIndex = next;
         CH.ui.focusSheet(next);
-        CH.ui.updateMusicHint(CH.genres, state.settings.music, next);
+        CH.ui.updateMusicHint(CH.genres, state.settings.music, next, state.settings.shuffle === 'on');
       }
       return;
     }
     if (key === 'ok') {
-      changeSettings(CH.store.toggleGenre(state.settings, CH.genres[state.musicIndex].id));
+      const genre = CH.genres[state.musicIndex];
+      changeSettings(genre ? CH.store.toggleGenre(state.settings, genre.id) : CH.store.cycle(state.settings, 'shuffle', 1));
       renderMusic();
     }
   }
@@ -982,13 +984,18 @@
   }
 
   // Where Ambient left off in this list: the saved track if it's still in it,
-  // else the top (the Music setting changed since).
+  // else -1, the top (the Music setting changed since).
   function resumeIndex(tracks, saved) {
     if (!saved.file) return saved.track; // saved before tracks were remembered by file
     for (let i = 0; i < tracks.length; i++) {
       if (tracks[i].file === saved.file) return i;
     }
-    return 0;
+    return -1;
+  }
+
+  // Ambient's genres in a random order (Brainrot's own set keeps its order).
+  function shuffleOn() {
+    return state.settings.shuffle === 'on' && !brainrotOn();
   }
 
   function musicOn() {
@@ -1023,12 +1030,12 @@
     return tracksFor(state.settings.music).filter(function (t) { return t.set !== 'brainrot'; });
   }
 
-  // A new Music choice or Brainrot mode: a new playlist, from its start;
-  // playing on if Ambient is up.
+  // A new Music choice or Brainrot mode: a new playlist, from its start (or,
+  // shuffled, anywhere); playing on if Ambient is up.
   function changeMusic() {
     const wasPlaying = CH.player.state().wanted;
     CH.player.pause();
-    CH.player.init(ambientTracks(), 0, onPlayer);
+    CH.player.init(ambientTracks(), -1, onPlayer, shuffleOn());
     if (state.screen === 'ambient' && ambientMusicOn() && wasPlaying) CH.player.play();
     if (state.screen === 'ambient') updateAmbient();
   }
@@ -1302,7 +1309,7 @@
     renderHome(null);
     const ambient = s ? readAmbient() : {};
     const tracks = ambientTracks();
-    CH.player.init(tracks, resumeIndex(tracks, ambient), onPlayer);
+    CH.player.init(tracks, resumeIndex(tracks, ambient), onPlayer, shuffleOn());
     // Left on Ambient (e.g. the TV went off with it showing): come back to it.
     if (ambient.open && state.settings.ambient === 'on') openAmbient(!ambient.paused);
     doc.addEventListener('keydown', onKey);

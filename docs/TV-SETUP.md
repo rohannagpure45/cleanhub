@@ -141,17 +141,22 @@ Home. If the TV is switched off while Ambient is showing, Clean Hub reopens
 it the next time it starts.
 
 Wallpapers (▲ ▼ in Ambient, or Settings → Ambient wallpaper):
-- **Lamp**, **Midnight** and **Black** are near-black, for low power.
-- **Sunset**, **Coast**, **Dunes**, **Aurora**, **City Rain** and **Deco** are
+- **Lamp**, **Midnight** and **Black** are near-black, for low power, and so
+  are four night scenes lit by one light: **Street Lamp**, **Moonrise**,
+  **Lighthouse** and **Fireflies**.
+- **Sunset**, **Coast**, **Dunes**, **Aurora** and **City Rain** are
   full-colour scenes, with a light clock.
 - **Rotate** shows the scenes in turn, a new one every quarter hour.
 
-They move slowly, as you'd expect them to: clouds and mist drift left to
-right, the aurora drifts and breathes, sand blows across the dunes, the sun's
-glitter sparkles, traffic streams past below the rainy window, Deco's
-sunburst turns and a sheen crosses its gold, dust floats in the lamp light
-and Midnight has the odd shooting star. Black stays still. Settings →
-**Wallpaper motion: Off** shows them all as still pictures.
+They move slowly, as you'd expect them to: clouds and mist drift with the
+wind; on Coast the swell rolls in towards the shore (slow at the horizon,
+quicker close by) and the sun's glitter sparkles; sand streams off the dune
+crests; the aurora's two ribbons fold past each other; below the rainy window
+tail lights go one way and headlights the other, and drops cling to the
+glass, slip, cling, then run; dust rises slowly through the lamp light; stars
+twinkle in sets, never all at once, and Midnight has the odd shooting star.
+Black stays still. Settings → **Wallpaper motion: Off** shows them all as
+still pictures.
 
 The TV has timers that would end an all-day session. No app can override
 them, so set them once:
@@ -166,7 +171,7 @@ them, so set them once:
 
 **Using less power.** On this mini-LED TV the backlight is most of the power
 draw. The dark wallpapers are under 2% average brightness, so local dimming
-can turn most zones off. The scenes run from about 13% (Deco) to 70% (Dunes),
+can turn most zones off. The scenes run from about 14% (City Rain) to 70% (Dunes),
 so they draw roughly what ordinary TV does; that's fine for this panel, which
 is LCD and can't burn in. Motion keeps the TV's graphics chip busy too (a
 little more power); Wallpaper motion: Off saves that.

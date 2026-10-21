@@ -16,11 +16,28 @@
       },
       {
         "src": "img/wall/lamp/dust.webp",
-        "x": 0,
-        "y": 0,
-        "w": 1920,
-        "h": 700,
-        "anim": "wall-drift-960 260s linear -30s infinite",
+        "x": -120,
+        "y": -150,
+        "w": 2400,
+        "h": 1000,
+        "anim": "wall-drift-1200 300s linear -30s infinite",
+        "tilt": -9,
+        "box": {
+          "x": 960,
+          "y": 0,
+          "w": 960,
+          "h": 700,
+          "mask": "radial-gradient(760px 760px at 800px -40px, #000 0%, rgba(0,0,0,0.45) 45%, rgba(0,0,0,0) 85%)"
+        }
+      },
+      {
+        "src": "img/wall/lamp/dust-near.webp",
+        "x": -120,
+        "y": -150,
+        "w": 2400,
+        "h": 1000,
+        "anim": "wall-drift-1200 120s linear -70s infinite",
+        "tilt": -9,
         "box": {
           "x": 960,
           "y": 0,
@@ -39,12 +56,28 @@
         "h": 1080
       },
       {
-        "src": "img/wall/midnight/twinkle.webp",
+        "src": "img/wall/midnight/twinkle0.webp",
         "x": 0,
         "y": 0,
         "w": 1920,
         "h": 669,
-        "anim": "wall-pulse 6.5s ease-in-out -1.5s infinite"
+        "anim": "wall-glimmer 5.3s ease-in-out -1.5s infinite"
+      },
+      {
+        "src": "img/wall/midnight/twinkle1.webp",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 669,
+        "anim": "wall-glimmer 7.9s ease-in-out -4.0s infinite"
+      },
+      {
+        "src": "img/wall/midnight/twinkle2.webp",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 669,
+        "anim": "wall-glimmer 11.3s ease-in-out -8.2s infinite"
       },
       {
         "kind": "shoot",
@@ -54,6 +87,186 @@
         "length": 760,
         "dur": 47,
         "delay": 12
+      },
+      {
+        "kind": "shoot",
+        "x": 1180,
+        "y": 150,
+        "angle": 31,
+        "length": 760,
+        "dur": 67,
+        "delay": 45
+      }
+    ],
+    "streetlamp": [
+      {
+        "src": "img/wall/streetlamp/base.jpg",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      {
+        "src": "img/wall/streetlamp/snow-far.webp",
+        "x": 0,
+        "y": 0,
+        "w": 840,
+        "h": 1440,
+        "anim": "wall-sink-720 70s linear -9.78903388885682s infinite",
+        "box": {
+          "x": 180,
+          "y": 280,
+          "w": 840,
+          "h": 720,
+          "mask": "radial-gradient(400px 540px at 420px 240px, #000 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0) 100%)"
+        }
+      },
+      {
+        "src": "img/wall/streetlamp/snow-near.webp",
+        "x": 0,
+        "y": 0,
+        "w": 840,
+        "h": 1440,
+        "anim": "wall-sink-720 38s linear -14.19754567221289s infinite",
+        "box": {
+          "x": 180,
+          "y": 280,
+          "w": 840,
+          "h": 720,
+          "mask": "radial-gradient(400px 540px at 420px 240px, #000 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0) 100%)"
+        }
+      }
+    ],
+    "moonrise": [
+      {
+        "src": "img/wall/moonrise/base.jpg",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      {
+        "src": "img/wall/moonrise/glint0.webp",
+        "x": 682,
+        "y": 669,
+        "w": 1056,
+        "h": 411,
+        "anim": "wall-pulse 2.8s ease-in-out -0.0s infinite"
+      },
+      {
+        "src": "img/wall/moonrise/glint1.webp",
+        "x": 682,
+        "y": 669,
+        "w": 1056,
+        "h": 411,
+        "anim": "wall-pulse 2.8s ease-in-out -1.4s infinite"
+      },
+      {
+        "src": "img/wall/moonrise/clouds.webp",
+        "x": 0,
+        "y": 0,
+        "w": 3840,
+        "h": 260,
+        "anim": "wall-drift-1920 320s linear -110s infinite",
+        "box": {
+          "x": 510,
+          "y": 420,
+          "w": 1400,
+          "h": 260,
+          "mask": "radial-gradient(560px 190px at 700px 128px, #000 0%, rgba(0,0,0,0.4) 45%, rgba(0,0,0,0) 100%)"
+        }
+      }
+    ],
+    "lighthouse": [
+      {
+        "src": "img/wall/lighthouse/base.jpg",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      {
+        "src": "img/wall/lighthouse/surf.webp",
+        "x": 0,
+        "y": 704,
+        "w": 1920,
+        "h": 18,
+        "anim": "wall-glimmer 7.5s ease-in-out -2s infinite"
+      },
+      {
+        "src": "img/wall/lighthouse/beam-left.webp",
+        "x": 0,
+        "y": 127,
+        "w": 1540,
+        "h": 420,
+        "anim": "wall-beam 24s ease-in-out -4.800000000000001s infinite",
+        "origin": "1540px 210px"
+      },
+      {
+        "src": "img/wall/lighthouse/beam-right.webp",
+        "x": 1540,
+        "y": 127,
+        "w": 380,
+        "h": 420,
+        "anim": "wall-beam 24s ease-in-out -16.8s infinite",
+        "origin": "0px 210px"
+      },
+      {
+        "src": "img/wall/lighthouse/flash.webp",
+        "x": 1280,
+        "y": 77,
+        "w": 520,
+        "h": 520,
+        "anim": "wall-flash 24s linear -4.800000000000001s infinite"
+      }
+    ],
+    "fireflies": [
+      {
+        "src": "img/wall/fireflies/base.jpg",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      {
+        "src": "img/wall/fireflies/flies0.webp",
+        "x": 0,
+        "y": 432,
+        "w": 1920,
+        "h": 618,
+        "anim": "wall-blink 4.7s ease-out -2.9s infinite"
+      },
+      {
+        "src": "img/wall/fireflies/flies1.webp",
+        "x": 0,
+        "y": 432,
+        "w": 1920,
+        "h": 618,
+        "anim": "wall-blink 5.9s ease-out -5.4s infinite"
+      },
+      {
+        "src": "img/wall/fireflies/flies2.webp",
+        "x": 0,
+        "y": 432,
+        "w": 1920,
+        "h": 618,
+        "anim": "wall-blink 7.3s ease-out -3.8s infinite"
+      },
+      {
+        "src": "img/wall/fireflies/flies3.webp",
+        "x": 0,
+        "y": 432,
+        "w": 1920,
+        "h": 618,
+        "anim": "wall-blink 8.6s ease-out -4.6s infinite"
+      },
+      {
+        "src": "img/wall/fireflies/flies4.webp",
+        "x": 0,
+        "y": 432,
+        "w": 1920,
+        "h": 618,
+        "anim": "wall-blink 11.2s ease-out -0.7s infinite"
       }
     ],
     "sunset": [
@@ -137,18 +350,62 @@
       {
         "src": "img/wall/coast/swell0.webp",
         "x": 0,
-        "y": 648,
+        "y": 0,
         "w": 1920,
-        "h": 432,
-        "anim": "wall-pulse 6.6s ease-in-out -0.0s infinite"
+        "h": 480,
+        "anim": "wall-roll-240 1709.2s linear -0.0s infinite",
+        "box": {
+          "x": 0,
+          "y": 658,
+          "w": 1920,
+          "h": 34,
+          "maskSrc": "img/wall/coast/swell0-mask.webp"
+        }
       },
       {
         "src": "img/wall/coast/swell1.webp",
         "x": 0,
-        "y": 648,
+        "y": 0,
         "w": 1920,
-        "h": 432,
-        "anim": "wall-pulse 6.6s ease-in-out -3.3s infinite"
+        "h": 480,
+        "anim": "wall-roll-240 405.4s linear -149.998s infinite",
+        "box": {
+          "x": 0,
+          "y": 684,
+          "w": 1920,
+          "h": 64,
+          "maskSrc": "img/wall/coast/swell1-mask.webp"
+        }
+      },
+      {
+        "src": "img/wall/coast/swell2.webp",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 480,
+        "anim": "wall-roll-240 96.2s linear -71.188s infinite",
+        "box": {
+          "x": 0,
+          "y": 738,
+          "w": 1920,
+          "h": 124,
+          "maskSrc": "img/wall/coast/swell2-mask.webp"
+        }
+      },
+      {
+        "src": "img/wall/coast/swell3.webp",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 480,
+        "anim": "wall-roll-240 23.3s linear -25.863s infinite",
+        "box": {
+          "x": 0,
+          "y": 848,
+          "w": 1920,
+          "h": 232,
+          "maskSrc": "img/wall/coast/swell3-mask.webp"
+        }
       },
       {
         "src": "img/wall/coast/glint0.webp",
@@ -156,7 +413,7 @@
         "y": 648,
         "w": 1251,
         "h": 432,
-        "anim": "wall-pulse 2.4s ease-in-out -0.0s infinite"
+        "anim": "wall-glimmer 1.9s ease-in-out -0.0s infinite"
       },
       {
         "src": "img/wall/coast/glint1.webp",
@@ -164,7 +421,15 @@
         "y": 648,
         "w": 1251,
         "h": 432,
-        "anim": "wall-pulse 2.4s ease-in-out -1.2s infinite"
+        "anim": "wall-glimmer 2.6s ease-in-out -0.9s infinite"
+      },
+      {
+        "src": "img/wall/coast/glint2.webp",
+        "x": 669,
+        "y": 648,
+        "w": 1251,
+        "h": 432,
+        "anim": "wall-glimmer 3.5s ease-in-out -2.1s infinite"
       }
     ],
     "dunes": [
@@ -184,12 +449,19 @@
         "anim": "wall-drift-1920 540s linear -200s infinite"
       },
       {
-        "src": "img/wall/dunes/sand.webp",
+        "src": "img/wall/dunes/drift.webp",
         "x": 0,
-        "y": 507,
+        "y": 0,
         "w": 3840,
-        "h": 573,
-        "anim": "wall-drift-1920 55s linear -20s infinite"
+        "h": 619,
+        "anim": "wall-drift-1920 30s linear -10s infinite",
+        "box": {
+          "x": 0,
+          "y": 461,
+          "w": 1920,
+          "h": 619,
+          "maskSrc": "img/wall/dunes/drift-mask.webp"
+        }
       }
     ],
     "aurora": [
@@ -201,12 +473,28 @@
         "h": 1080
       },
       {
-        "src": "img/wall/aurora/stars.webp",
+        "src": "img/wall/aurora/stars0.webp",
         "x": 0,
         "y": 0,
         "w": 1920,
         "h": 823,
-        "anim": "wall-glimmer 5.5s ease-in-out -1.0s infinite"
+        "anim": "wall-glimmer 4.7s ease-in-out -1.0s infinite"
+      },
+      {
+        "src": "img/wall/aurora/stars1.webp",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 823,
+        "anim": "wall-glimmer 6.9s ease-in-out -3.1s infinite"
+      },
+      {
+        "src": "img/wall/aurora/stars2.webp",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 823,
+        "anim": "wall-glimmer 9.1s ease-in-out -6.0s infinite"
       },
       {
         "src": "img/wall/aurora/curtains.webp",
@@ -225,6 +513,14 @@
         "anim": "wall-drift-1920 240s linear -90s infinite, wall-breathe 13s ease-in-out -3s infinite"
       },
       {
+        "src": "img/wall/aurora/curtains-high.webp",
+        "x": 0,
+        "y": 0,
+        "w": 3840,
+        "h": 712,
+        "anim": "wall-drift-1920 410s linear -160s infinite reverse, wall-breathe 17s ease-in-out -9s infinite"
+      },
+      {
         "src": "img/wall/aurora/land.webp",
         "x": 0,
         "y": 624,
@@ -241,20 +537,36 @@
         "h": 1080
       },
       {
-        "src": "img/wall/rain/traffic.webp",
+        "src": "img/wall/rain/traffic0.webp",
         "x": 0,
-        "y": 864,
+        "y": 846,
         "w": 3840,
-        "h": 183,
-        "anim": "wall-drift-1920 36s linear -5s infinite"
+        "h": 110,
+        "anim": "wall-drift-1920 44s linear -5s infinite"
       },
       {
-        "src": "img/wall/rain/near.webp",
+        "src": "img/wall/rain/traffic1.webp",
+        "x": 0,
+        "y": 922,
+        "w": 3840,
+        "h": 110,
+        "anim": "wall-drift-1920 31s linear -12s infinite reverse"
+      },
+      {
+        "src": "img/wall/rain/near0.webp",
         "x": 0,
         "y": 0,
         "w": 1920,
         "h": 1080,
         "anim": "wall-breathe 9s ease-in-out -2s infinite"
+      },
+      {
+        "src": "img/wall/rain/near1.webp",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080,
+        "anim": "wall-breathe 13s ease-in-out -7s infinite"
       },
       {
         "src": "img/wall/rain/glass.webp",
@@ -267,115 +579,69 @@
         "kind": "drops",
         "drops": [
           {
-            "x": 622,
-            "dur": 8.4,
-            "delay": 5.7,
+            "x": 743,
+            "y": -118,
+            "dur": 11.7,
+            "delay": 2.4,
+            "size": 0.84
+          },
+          {
+            "x": 1155,
+            "y": -122,
+            "dur": 15.0,
+            "delay": 17.9,
+            "size": 1.17
+          },
+          {
+            "x": 1597,
+            "y": -61,
+            "dur": 15.8,
+            "delay": 11.6,
             "size": 0.92
           },
           {
-            "x": 1672,
-            "dur": 13.8,
-            "delay": 11.4,
-            "size": 0.95
+            "x": 230,
+            "y": 5,
+            "dur": 17.2,
+            "delay": 9.1,
+            "size": 1.17
           },
           {
-            "x": 178,
-            "dur": 7.6,
-            "delay": 3.5,
+            "x": 1766,
+            "y": -70,
+            "dur": 17.3,
+            "delay": 5.2,
+            "size": 1.06
+          },
+          {
+            "x": 372,
+            "y": -14,
+            "dur": 13.4,
+            "delay": 17.6,
             "size": 0.96
           },
           {
-            "x": 377,
-            "dur": 11.1,
-            "delay": 3.0,
-            "size": 1.1
+            "x": 86,
+            "y": -107,
+            "dur": 17.8,
+            "delay": 6.7,
+            "size": 0.76
           },
           {
-            "x": 1799,
-            "dur": 14.6,
-            "delay": 12.2,
-            "size": 1.01
+            "x": 888,
+            "y": -86,
+            "dur": 14.3,
+            "delay": 8.5,
+            "size": 0.77
           },
           {
-            "x": 1106,
-            "dur": 11.2,
-            "delay": 12.3,
-            "size": 0.93
-          },
-          {
-            "x": 420,
-            "dur": 9.8,
-            "delay": 2.9,
-            "size": 1.14
-          },
-          {
-            "x": 1372,
-            "dur": 12.4,
-            "delay": 3.7,
-            "size": 0.71
-          },
-          {
-            "x": 1798,
-            "dur": 7.1,
-            "delay": 2.9,
-            "size": 0.83
+            "x": 1254,
+            "y": 2,
+            "dur": 18.8,
+            "delay": 12.4,
+            "size": 1.05
           }
         ]
-      }
-    ],
-    "deco": [
-      {
-        "src": "img/wall/deco/base.jpg",
-        "x": 0,
-        "y": 0,
-        "w": 1920,
-        "h": 1080
-      },
-      {
-        "src": "img/wall/deco/wedges.webp",
-        "x": 0,
-        "y": 0,
-        "w": 1800,
-        "h": 1121,
-        "anim": "wall-spin 120s linear infinite",
-        "origin": "900px 900px",
-        "box": {
-          "x": 60,
-          "y": 104,
-          "w": 1800,
-          "h": 900
-        }
-      },
-      {
-        "src": "img/wall/deco/ink.webp",
-        "x": 0,
-        "y": 0,
-        "w": 1920,
-        "h": 1080
-      },
-      {
-        "src": "img/wall/deco/sheen.webp",
-        "x": 0,
-        "y": 0,
-        "w": 1920,
-        "h": 1080,
-        "sheen": 15
-      },
-      {
-        "src": "img/wall/deco/sparkle0.webp",
-        "x": 0,
-        "y": 120,
-        "w": 1920,
-        "h": 284,
-        "anim": "wall-pulse 4.4s ease-in-out -0.0s infinite"
-      },
-      {
-        "src": "img/wall/deco/sparkle1.webp",
-        "x": 0,
-        "y": 120,
-        "w": 1920,
-        "h": 284,
-        "anim": "wall-pulse 4.4s ease-in-out -2.2s infinite"
       }
     ]
   };

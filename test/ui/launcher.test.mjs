@@ -32,7 +32,9 @@ beforeEach(async () => {
 });
 
 const DEFAULT_HOME = ['Netflix', 'YouTube', 'Prime Video', 'Disney+', 'HBO Max', 'Plex', 'Tubi', 'Spotify'];
-const S = (o = {}) => Object.assign({ v: 1, layout: 'list', theme: 'dusk', font: 'manrope', focus: 'glass', icons: 'on', clock: '12', music: 'all', apps: null }, o);
+// Music plays in list order here (Shuffle off), so tests can name the next
+// track; the Shuffle tests turn it back on.
+const S = (o = {}) => Object.assign({ v: 1, layout: 'list', theme: 'dusk', font: 'manrope', focus: 'glass', icons: 'on', clock: '12', music: 'all', shuffle: 'off', apps: null }, o);
 
 // Most tests are about apps, so they start with Ambient hidden; the Ambient
 // tests pass settings that show it.
@@ -568,8 +570,8 @@ test('Ambient keys: first press only wakes the controls, then OK, arrows and wal
   await press('ArrowDown');
   assert.equal(await page.getAttribute('html', 'data-wallpaper'), 'midnight');
   await press('ArrowDown');
-  assert.equal(await page.getAttribute('html', 'data-wallpaper'), 'black');
-  assert.equal((await state()).settings.wallpaper, 'black', 'saved');
+  assert.equal(await page.getAttribute('html', 'data-wallpaper'), 'streetlamp');
+  assert.equal((await state()).settings.wallpaper, 'streetlamp', 'saved');
 });
 
 test('Back leaves Ambient, stops the music and keeps focus on it', async () => {
@@ -656,7 +658,7 @@ test('the dark wallpapers are nearly black on screen (low power on a local-dimmi
 });
 
 test('scenes fill the screen in colour, with the clock light and readable over them', async () => {
-  const scenes = ['sunset', 'coast', 'dunes', 'aurora', 'rain', 'deco'];
+  const scenes = ['sunset', 'coast', 'dunes', 'aurora', 'rain'];
   for (const wall of scenes) {
     await page.clock.install();
     await openAmbient('', S({ wallpaper: wall }));
@@ -704,7 +706,7 @@ test('▲ ▼ in Ambient cross-fade to the next wallpaper and name it', async ()
   assert.equal(await toastText(), 'Black');
   await page.waitForFunction(() => document.querySelector('#ambient').getAttribute('data-tone') === 'dark');
   assert.equal(await frontWall(), 'black');
-  await press('ArrowUp', 3); // Midnight, Lamp, then round to Rotate
+  await press('ArrowUp', 7); // the four night scenes, Midnight, Lamp, then round to Rotate
   assert.match(await toastText(), /^Rotate/);
   assert.equal((await state()).settings.wallpaper, 'rotate', 'saved');
   assert.deepEqual(errors, []);
@@ -746,10 +748,10 @@ test('Rotate shows each scene for a quarter of an hour, changing on the clock', 
 });
 
 test('the wallpaper row in Settings shows a swatch of the wallpaper', async () => {
-  await open('', { settings: S({ wallpaper: 'deco' }) });
+  await open('', { settings: S({ wallpaper: 'rain' }) });
   await openSettings();
   const swatch = () => page.$eval('#sheet [data-option="wallpaper"] .swatch', (e) => e.style.backgroundImage);
-  assert.match(await swatch(), /thumb-wall-deco\.jpg/);
+  assert.match(await swatch(), /thumb-wall-rain\.jpg/);
   const rows = await sheetLabels();
   await press('ArrowDown', rows.indexOf('Ambient wallpaper'));
   await press('ArrowRight');
@@ -771,16 +773,20 @@ const wallAnimations = () => page.evaluate(() => document.getAnimations()
       .filter((k) => !['offset', 'computedOffset', 'easing', 'composite'].includes(k)),
   })));
 
-// Pauses every animation at `ms` and reads each drifting layer's x offset.
-const driftOffsets = (ms) => page.evaluate((t) => {
+// Pauses every animation at `ms` and reads each sliding layer (drift or
+// roll): its x and y offset, and whether it runs in reverse.
+const slideOffsets = (ms, kind = 'drift') => page.evaluate(([t, k]) => {
   document.getAnimations().forEach((a) => { a.pause(); a.currentTime = t; });
   return [...document.querySelectorAll('#ambient .ambient-wall.is-front .wall-layer')]
-    .filter((el) => /wall-drift/.test(el.style.animation))
-    .map((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).m41);
-}, ms);
+    .filter((el) => new RegExp('wall-' + k).test(el.style.animation))
+    .map((el) => {
+      const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+      return { x: m.m41, y: m.m42, reverse: /reverse/.test(el.style.animation.split(',')[0]), top: el.parentNode.getBoundingClientRect().top };
+    });
+}, [ms, kind]);
 
-test('scenes move: layers drift left to right and shimmer, only ever sliding or fading', async () => {
-  for (const wall of ['sunset', 'coast', 'dunes', 'aurora', 'rain', 'deco']) {
+test('scenes move: layers drift with the wind and shimmer, only ever sliding or fading', async () => {
+  for (const wall of ['sunset', 'coast', 'dunes', 'aurora', 'rain']) {
     await openAmbient('', S({ wallpaper: wall }));
     await page.waitForFunction(() => document.querySelector('#ambient .ambient-wall.is-front.has-layers'));
     const anims = await wallAnimations();
@@ -788,16 +794,17 @@ test('scenes move: layers drift left to right and shimmer, only ever sliding or 
     for (const a of anims) {
       for (const prop of a.props) assert.ok(['transform', 'opacity'].includes(prop), `${wall}: ${a.name} animates ${prop}`);
     }
-    if (wall !== 'deco') {
-      // Two seconds apart (a drift wraps round once per cycle, so compare modulo a tile).
-      const before = await driftOffsets(10000);
-      const after = await driftOffsets(12000);
-      assert.ok(before.length >= 1, `${wall}: something drifts`);
-      before.forEach((x, i) => {
-        const moved = (((after[i] - x) % 1920) + 1920) % 1920;
-        assert.ok(moved > 0 && moved < 960, `${wall}: drift ${i} moves right (${x} -> ${after[i]})`);
-      });
-    }
+    // Two seconds apart (a drift wraps round once per cycle, so compare modulo
+    // a tile): right with the wind, or left for a layer that runs in reverse
+    // (oncoming traffic, the aurora's high ribbon).
+    const before = await slideOffsets(10000);
+    const after = await slideOffsets(12000);
+    assert.ok(before.length >= 1, `${wall}: something drifts`);
+    before.forEach((b, i) => {
+      const moved = (((after[i].x - b.x) % 1920) + 1920) % 1920;
+      const ok = b.reverse ? moved > 960 : moved > 0 && moved < 960;
+      assert.ok(ok, `${wall}: drift ${i} moves ${b.reverse ? 'left' : 'right'} (${b.x} -> ${after[i].x})`);
+    });
     const still = await page.$eval('#ambient .ambient-wall.is-front', (e) => getComputedStyle(e).backgroundImage);
     assert.equal(still, 'none', `${wall}: the still isn't drawn under the layers`);
     assert.deepEqual(errors, [], `${wall}: no errors`);
@@ -829,18 +836,54 @@ test('Wallpaper motion: Off shows the still picture, and On brings the layers ba
   assert.deepEqual(errors, []);
 });
 
-test('Deco: the sheen sweeps across while the gold under it stays put', async () => {
-  await openAmbient('', S({ wallpaper: 'deco' }));
-  await page.waitForFunction(() => document.querySelector('#ambient .wall-sheen'));
-  for (const ms of [500, 2600, 4800, 9000]) {
-    const [band, pic] = await page.evaluate((t) => {
-      document.getAnimations().forEach((a) => { a.pause(); a.currentTime = t; });
-      return ['.wall-sheen', '.wall-sheen-pic'].map((sel) =>
-        new DOMMatrixReadOnly(getComputedStyle(document.querySelector('#ambient ' + sel)).transform).m41);
-    }, ms);
-    assert.ok(Math.abs(band + pic) < 0.5, `at ${ms} ms the gold moved by ${band + pic} px`);
-    if (ms === 2600) assert.ok(band > 0 && band < 1920, `the band is on screen mid-sweep (${band})`);
+test('Coast: the swell rolls in towards the shore, faster close by', async () => {
+  await openAmbient('', S({ wallpaper: 'coast' }));
+  await page.waitForFunction(() => document.querySelector('#ambient .ambient-wall.is-front.has-layers'));
+  const before = await slideOffsets(20000, 'roll');
+  const after = await slideOffsets(22000, 'roll');
+  assert.ok(before.length >= 3, `${before.length} bands of swell`);
+  const speeds = before.map((b, i) => ((after[i].y - b.y) % 240 + 240) % 240);
+  speeds.forEach((v, i) => assert.ok(v > 0 && v < 120, `band ${i} rolls down (${v} px in 2 s)`));
+  const byTop = before.map((b, i) => [b.top, speeds[i]]).sort((p, q) => p[0] - q[0]);
+  for (let i = 1; i < byTop.length; i++) {
+    assert.ok(byTop[i][1] > byTop[i - 1][1], `a nearer band (top ${byTop[i][0]}) rolls faster than the one above it`);
   }
+  assert.deepEqual(errors, []);
+});
+
+test('stars twinkle in sets on their own periods, never all at once', async () => {
+  for (const wall of ['midnight', 'aurora']) {
+    await openAmbient('', S({ wallpaper: wall }));
+    await page.waitForFunction(() => document.querySelector('#ambient .ambient-wall.is-front.has-layers'));
+    const periods = await page.evaluate(() => document.getAnimations()
+      .filter((a) => a.animationName === 'wall-glimmer' && a.effect.target.closest('#ambient .ambient-wall.is-front'))
+      .map((a) => a.effect.getTiming().duration));
+    assert.ok(periods.length >= 3, `${wall}: ${periods.length} twinkling sets`);
+    assert.equal(new Set(periods).size, periods.length, `${wall}: each set has its own period (${periods})`);
+    await page.close();
+    page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
+    page.on('pageerror', (e) => errors.push(String(e)));
+  }
+  assert.deepEqual(errors, []);
+});
+
+test('Lamp: dust at two depths rises slowly through the light', async () => {
+  await openAmbient('', S({ wallpaper: 'lamp' }));
+  await page.waitForFunction(() => document.querySelector('#ambient .ambient-wall.is-front.has-layers'));
+  const dust = await page.evaluate(() => [...document.querySelectorAll('#ambient .ambient-wall.is-front .wall-tilt')]
+    .map((el) => ({ turn: new DOMMatrixReadOnly(getComputedStyle(el).transform).b, secs: parseFloat(el.firstChild.style.animationDuration) })));
+  assert.equal(dust.length, 2, 'far and near dust');
+  dust.forEach((d) => assert.ok(d.turn < 0, `its frame turns uphill (sin ${d.turn})`));
+  assert.notEqual(dust[0].secs, dust[1].secs, 'the near dust moves at its own speed');
+  assert.deepEqual(errors, []);
+});
+
+test('City Rain: drops cling at different heights before they run', async () => {
+  await openAmbient('', S({ wallpaper: 'rain' }));
+  await page.waitForFunction(() => document.querySelector('#ambient .wall-drop'));
+  const tops = await page.$$eval('#ambient .ambient-wall.is-front .wall-drop', (els) => els.map((e) => e.style.top));
+  assert.ok(tops.length >= 6, `${tops.length} drops`);
+  assert.ok(new Set(tops).size >= tops.length - 1, `they start at different heights (${tops})`);
 });
 
 test('after a cross-fade, the old wallpaper’s layers are gone (nothing left running)', async () => {
@@ -1202,7 +1245,7 @@ test('Press OK to play: one OK starts the music when autoplay was refused', asyn
 // The player's list: how many tracks, and which genre the current one is from.
 const playing = () => page.evaluate(() => {
   const st = window.CleanHub.player.state();
-  return { count: st.count, index: st.index, set: st.track && st.track.set, wanted: st.wanted };
+  return { count: st.count, index: st.index, set: st.track && st.track.set, file: st.track && st.track.file, wanted: st.wanted };
 });
 const GENRES = ['Originals', '1920s', 'Classical', 'Piano', 'Ragtime', 'Big band', 'Ambient'];
 const GENRE_IDS = ['originals', 'vintage', 'classical', 'piano', 'ragtime', 'bigband', 'ambient'];
@@ -1255,8 +1298,8 @@ test('Ambient music is a checklist of genres, every one ticked to start', async 
   assert.deepEqual(errors, []);
 });
 
-test('a mix of genres is saved, and after a restart Ambient plays only those', async () => {
-  await open('', { settings: S({ music: 'originals' }) }); // an older single-genre save
+test('a mix of genres is saved, and after a restart Ambient plays only those, shuffled', async () => {
+  await open('', { settings: S({ music: 'originals', shuffle: undefined }) }); // an older save: Shuffle on
   await openMusicSheet();
   assert.deepEqual(await ticked(), ['Originals']);
   await toggleGenres(['Classical', 'Piano', 'Ambient']);
@@ -1273,16 +1316,68 @@ test('a mix of genres is saved, and after a restart Ambient plays only those', a
   await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
   const counts = await trackCounts();
   const expected = mix.reduce((n, id) => n + counts[id], 0);
-  const p = await playing();
-  assert.equal(p.count, expected);
-  assert.equal(p.set, 'originals', 'ticked genres play in list order');
-  const heard = new Set([p.set]);
-  for (let i = 1; i < expected; i++) {
-    await press('ArrowRight');
-    heard.add((await playing()).set);
+  assert.equal((await playing()).count, expected);
+  // Two times round: each round plays every ticked track once, in a new order.
+  const rounds = [[], []];
+  for (const round of rounds) {
+    for (let i = 0; i < expected; i++) {
+      if (round !== rounds[0] || i) await press('ArrowRight');
+      round.push(await playing());
+    }
   }
-  assert.deepEqual([...heard].sort(), [...mix].sort(), 'every track is from a ticked genre');
+  const listOrder = await page.evaluate((m) => window.CleanHub.playlist.filter((t) => m.includes(t.set)).map((t) => t.file), mix);
+  for (const round of rounds) {
+    assert.equal(new Set(round.map((t) => t.file)).size, expected, 'every track once');
+    assert.deepEqual([...new Set(round.map((t) => t.set))].sort(), [...mix].sort(), 'only ticked genres');
+  }
+  assert.notDeepEqual(rounds[0].map((t) => t.file), listOrder, 'not the list order');
+  assert.notDeepEqual(rounds[1].map((t) => t.file), rounds[0].map((t) => t.file), 'a new order the second time round');
+  assert.notEqual(rounds[1][0].file, rounds[0][expected - 1].file, 'no track twice in a row');
   assert.deepEqual(errors, []);
+});
+
+test('Shuffle is the last row of the music checklist, and can be turned off', async () => {
+  await open('', { settings: S({ music: ['originals', 'piano'], shuffle: undefined }) });
+  await openMusicSheet();
+  assert.equal(await page.$eval('#sheet [data-shuffle]', (e) => e.classList.contains('is-on')), true, 'on to start');
+  assert.match(await page.$eval('#sheet .sheet-sub', (e) => e.textContent), /Playing 2 of 7, shuffled/);
+  await press('ArrowDown', GENRES.length); // past the genres
+  assert.equal(await focusedSheet(), 'Shuffle');
+  // The sheet slides: wait for it to settle with Shuffle in view.
+  await page.waitForFunction(() => {
+    const v = document.querySelector('#sheet .sheet-view').getBoundingClientRect();
+    const f = document.querySelector('#sheet .sheet-row.is-focused').getBoundingClientRect();
+    return f.top >= v.top - 1 && f.bottom <= v.bottom + 1;
+  }, null, { timeout: 3000 });
+  const sliver = await page.evaluate(() => {
+    const v = document.querySelector('#sheet .sheet-view').getBoundingClientRect();
+    return [...document.querySelectorAll('#sheet .sheet-track > :not(.pill)')].some((el) => {
+      const b = el.getBoundingClientRect();
+      return b.top < v.top - 1 && b.bottom > v.top + 1;
+    });
+  });
+  assert.equal(sliver, false, 'nothing half-cut under the title');
+  assert.match(await sheetHint(), /OK\s*Turn off/);
+  await press('Enter');
+  assert.equal((await state()).settings.shuffle, 'off');
+  assert.match(await page.$eval('#sheet .sheet-sub', (e) => e.textContent), /in order/);
+  await reload();
+  assert.equal((await state()).settings.shuffle, 'off', 'saved');
+  const first = await playing();
+  assert.equal(first.index, 0);
+  assert.equal(first.file, '01-lamp-light.m4a', 'the originals first, in their order');
+});
+
+test('shuffled, a restart picks up the track that was playing', async () => {
+  await openAmbient('', S({ music: ['classical', 'piano'], shuffle: 'on' }));
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  await press('ArrowRight', 3);
+  const before = await playing();
+  await reload(); // Ambient was showing, so it comes back
+  assert.equal((await state()).screen, 'ambient');
+  const after = await playing();
+  assert.equal(after.file, before.file);
+  assert.equal(after.count, before.count);
 });
 
 test('after the genres change, a restart starts the new list from its first track', async () => {
