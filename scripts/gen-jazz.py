@@ -12,6 +12,8 @@ scipy and macOS's afconvert (AAC is the format Samsung TVs and browsers share).
 import argparse
 import json
 import math
+import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -623,6 +625,8 @@ def main():
     ap.add_argument("--only", type=int)
     ap.add_argument("--wav", action="store_true")
     args = ap.parse_args()
+    if not shutil.which("afconvert"):
+        raise SystemExit("afconvert (macOS) is needed to encode AAC; nothing was rendered.")
     OUT.mkdir(parents=True, exist_ok=True)
     tracks = []
     wav_dir = ROOT / "dist" / "music-wav"
@@ -637,13 +641,20 @@ def main():
         print(f"Rendering {spec['title']} ({spec['feel']}, {spec['bpm']} bpm) …")
         x = Tune(spec).render()
         check(x, spec["title"])
-        with tempfile.TemporaryDirectory() as tmp:
+        # Encode beside app/ (dist/ is on the same volume) and move the file
+        # into place only once it's complete and opens, so an interrupted run
+        # can never leave a broken track for build.mjs to ship.
+        (ROOT / "dist").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=ROOT / "dist") as tmp:
             wav = Path(tmp) / "master.wav"
             wavfile.write(wav, SR, (x * 32767).astype(np.int16))
             if args.wav:
                 wavfile.write(wav_dir / (spec["file"] + ".wav"), SR, (x * 32767).astype(np.int16))
+            enc = Path(tmp) / entry["file"]
             subprocess.run(["afconvert", "-f", "m4af", "-d", "aac", "-b", "160000", "-s", "0",
-                            str(wav), str(OUT / entry["file"])], check=True)
+                            str(wav), str(enc)], check=True)
+            subprocess.run(["afinfo", str(enc)], check=True, capture_output=True)
+            os.replace(enc, OUT / entry["file"])
         print(f"  wrote app/music/{entry['file']} ({(OUT / entry['file']).stat().st_size // 1024} KB)")
     write_playlist(tracks)
     print("wrote app/music/playlist.js")

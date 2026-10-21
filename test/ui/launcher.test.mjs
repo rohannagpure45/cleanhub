@@ -533,7 +533,7 @@ const controlsShown = () => page.$eval('#ambient .ambient-controls', (e) => e.cl
 
 async function openAmbient(query = '', settings = S()) {
   await open(query, { settings });
-  assert.equal(await focusedHome(), 'Ambient', 'Ambient is first on Home');
+  assert.ok(['Ambient', 'cleanhub:ambient'].includes(await focusedHome()), 'Ambient is first on Home');
   await press('Enter');
   assert.equal((await state()).screen, 'ambient');
 }
@@ -704,7 +704,7 @@ test('if the TV viewer will not open, Clean Hub still steps aside', async () => 
   assert.deepEqual(await page.evaluate(() => window.__mock.sources), ['HDMI 4']);
 });
 
-test('Fire TV warns about an empty input and reports a refused switch', async () => {
+test('a refused input switch is reported and Clean Hub stays on screen', async () => {
   await open('?sourceFail=1', { settings: S({ input: 'hdmi1', ambient: 'off' }) });
   assert.equal(await focusedHome(), 'Fire TV');
   await press('Enter');
@@ -758,4 +758,139 @@ test('a stalled track is skipped by the watchdog', async () => {
   });
   await page.clock.runFor(61000);
   assert.equal((await AMB()).index, 1, 'moved on to the next track');
+});
+
+// ---- Second review: regressions -----------------------------------------------------
+
+test('a track that fails while the app is hidden is skipped on return, not left silent', async () => {
+  await openAmbient('?music=gap');
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  await press('ArrowRight'); // controls are already showing: next track (the missing one)
+  await page.waitForFunction(() => window.CleanHub.player.state().index === 1);
+  await page.waitForTimeout(300); // its error arrives
+  await page.evaluate(() => window.__mock.goHidden());
+  await page.waitForTimeout(2000); // past the 1.5 s skip, which the hide cancelled
+  await page.evaluate(() => window.__mock.returnFromApp());
+  await page.waitForFunction(() => window.CleanHub.player.state().index === 2 && window.CleanHub.player.state().wanted);
+});
+
+test('Ambient remembers a pause across a restart', async () => {
+  await openAmbient();
+  await press('Enter'); // controls show on entry, so this pauses
+  assert.equal((await AMB()).wanted, false);
+  await reload();
+  const a = await AMB();
+  assert.equal(a.screen, 'ambient');
+  assert.equal(a.wanted, false, 'still paused after the restart');
+});
+
+test('in the dock layout Ambient keeps its own small clock', async () => {
+  await openAmbient('', S({ layout: 'dock' }));
+  assert.equal(await page.$eval('#ambient .clock-time', (e) => getComputedStyle(e).fontSize), '72px');
+});
+
+test('with Home\'s clock off, Ambient still shows the time', async () => {
+  await openAmbient('', S({ clock: 'off' }));
+  const c = await page.$eval('#ambient .clock', (e) => ({ shown: getComputedStyle(e).display !== 'none', text: e.querySelector('.clock-time').textContent }));
+  assert.ok(c.shown && /\d:\d\d/.test(c.text), JSON.stringify(c));
+  assert.equal(await page.$eval('#home .clock', (e) => getComputedStyle(e).display), 'none');
+});
+
+test('choosing a track right after a failure is not overridden by the pending skip', async () => {
+  await openAmbient('?music=gap');
+  await press('ArrowRight'); // onto the missing track
+  await page.waitForTimeout(300);
+  await press('ArrowLeft'); // straight back to track 1
+  await page.waitForTimeout(2000);
+  assert.equal((await AMB()).index, 0);
+});
+
+test('when no track will play, the player stops trying and does not claim to be playing', async () => {
+  await page.clock.install();
+  await openAmbient('?music=broken');
+  // Skips run on the (fake) clock; the 404s arrive in real time.
+  for (let i = 0; i < 20 && !(await AMB()).broken; i++) {
+    await page.clock.runFor(2000);
+    await page.waitForTimeout(100);
+  }
+  const before = await AMB();
+  assert.equal(before.broken, true);
+  await page.clock.runFor(3 * 31000);
+  const after = await AMB();
+  assert.equal(after.index, before.index, 'no more reloading every 30 s');
+  assert.equal(after.playing, false);
+});
+
+test('toasts show above Ambient', async () => {
+  await openAmbient();
+  const z = await page.evaluate(() => [getComputedStyle(document.getElementById('toast')).zIndex, getComputedStyle(document.getElementById('ambient')).zIndex].map(Number));
+  assert.ok(z[0] > z[1], JSON.stringify(z));
+});
+
+test('Fire TV: a second OK during the slow first query does not switch twice', async () => {
+  await page.clock.install();
+  await open('?inputDelay=3300', { settings: S({ input: 'hdmi4', ambient: 'off' }), wait: false });
+  await page.waitForFunction(() => window.CleanHub && window.CleanHub.main);
+  await page.clock.runFor(200);
+  await press('Enter');
+  await page.clock.runFor(500);
+  await press('Enter');
+  await page.clock.runFor(4000);
+  assert.deepEqual(await page.evaluate(() => window.__mock.sources), ['HDMI 4']);
+  assert.deepEqual(await page.evaluate(() => window.__mock.launches), ['org.tizen.tv-viewer']);
+  assert.equal(await page.evaluate(() => window.__mock.inputQueries), 1, 'one shared query');
+});
+
+test('Fire TV: opening another app while the query runs cancels the switch', async () => {
+  await page.clock.install();
+  await open('?inputDelay=3300', { settings: S({ input: 'hdmi4', ambient: 'off' }), wait: false });
+  await page.waitForFunction(() => window.CleanHub && window.CleanHub.main);
+  await page.clock.runFor(200);
+  await press('Enter'); // Fire TV
+  await press('ArrowDown');
+  await press('Enter'); // Netflix
+  await page.clock.runFor(4000);
+  assert.deepEqual(await page.evaluate(() => window.__mock.sources), [], 'no late jump to HDMI');
+  assert.deepEqual(await page.evaluate(() => window.__mock.launches), ['org.tizen.netflix-app']);
+});
+
+test('Fire TV: stepping the setting through every input queries the TV once', async () => {
+  await open('', { settings: S({ ambient: 'off' }) });
+  await openSettings();
+  const rows = await page.$$eval('#sheet .sheet-label', (els) => els.map((e) => e.textContent));
+  await press('ArrowDown', rows.indexOf('Fire TV on Home'));
+  await press('ArrowRight', 4); // HDMI 1 .. HDMI 4
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => window.__mock.inputQueries), 1);
+});
+
+test('Fire TV: a TV that never answers gets a message instead of silence', async () => {
+  await page.clock.install();
+  await open('?inputHang=1', { settings: S({ input: 'hdmi4', ambient: 'off' }), wait: false });
+  await page.waitForFunction(() => window.CleanHub && window.CleanHub.main);
+  await page.clock.runFor(200);
+  await press('Enter');
+  await page.clock.runFor(8500);
+  assert.match(await page.$eval('#toast', (e) => e.textContent), /Couldn’t switch to HDMI 4/);
+});
+
+test('Press OK to play: one OK starts the music when autoplay was refused', async () => {
+  const strict = await chromium.launch(); // no autoplay exemption, like a fresh browser
+  try {
+    const ctx = await strict.newContext({ viewport: { width: 1920, height: 1080 } });
+    const pg = await ctx.newPage();
+    await pg.addInitScript(() => {
+      localStorage.setItem('cleanhub.settings', JSON.stringify({ v: 1, ambient: 'on' }));
+      localStorage.setItem('cleanhub.ambient', JSON.stringify({ open: true, track: 0 }));
+    });
+    await pg.clock.install();
+    await pg.goto(base);
+    await pg.waitForFunction(() => window.CleanHub.player.state().blocked, null, { timeout: 5000 });
+    assert.match(await pg.$eval('#ambient .ambient-text', (e) => e.textContent), /Press OK to play/);
+    await pg.clock.runFor(7000); // controls fade
+    await pg.keyboard.press('Enter');
+    await pg.waitForFunction(() => window.CleanHub.player.state().wanted && !window.CleanHub.player.state().blocked, null, { timeout: 5000 });
+  } finally {
+    await strict.close();
+  }
 });

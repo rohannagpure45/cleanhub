@@ -116,18 +116,23 @@
     // Inputs as the QN85B reported them: devices on HDMI 2 and HDMI 4.
     systeminfo: {
       getPropertyValue: function (prop, ok, fail) {
+        if (params.get('inputHang') === '1') return;
         setTimeout(function () {
           if (prop !== 'VIDEOSOURCE') { fail({ name: 'NotSupportedError', message: prop }); return; }
           window.__mock.inputQueries++;
+          const src = function (type, number) { return { type: type, number: number, __fromTV: true }; };
           ok({
-            connected: [{ type: 'TV', number: 1 }, { type: 'HDMI', number: 2 }, { type: 'HDMI', number: 4 }],
-            disconnected: [{ type: 'HDMI', number: 1 }, { type: 'HDMI', number: 3 }]
+            connected: [src('TV', 1), src('HDMI', 2), src('HDMI', 4)],
+            disconnected: [src('HDMI', 1), src('HDMI', 3)]
           });
         }, Number(params.get('inputDelay') || 10)); // the QN85B takes ~3300 ms
       }
     },
     tvwindow: {
       setSource: function (source, ok, fail) {
+        if (params.get('sourceHang') === '1') return;
+        // Like the TV, only its own input objects are accepted.
+        if (!source || !source.__fromTV) throw new TypeError('TypeMismatchError: Cannot convert to SystemInfoVideoSourceInfo');
         setTimeout(function () {
           if (params.get('sourceFail') === '1') { fail({ name: 'SecurityError', message: 'Permission denied' }); return; }
           window.__mock.sources.push(source.type + ' ' + source.number);

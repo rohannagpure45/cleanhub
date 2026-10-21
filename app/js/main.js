@@ -202,6 +202,7 @@
 
   function launch(entry) {
     if (!entry) return;
+    cancelSwitch();
     CH.ui.pressHome(state.homeIndex);
     CH.platform.launch(entry.id).catch(function () {
       CH.ui.toast('Couldn’t open ' + entry.name);
@@ -221,6 +222,7 @@
   }
 
   function openSettings() {
+    cancelSwitch();
     state.screen = 'settings';
     state.homeOnGear = true;
     state.settingsIndex = 0;
@@ -249,7 +251,9 @@
     CH.ui.applyLook(next);
     if (relayout) renderHome(remembered ? remembered.id : null);
     if (next.music !== prev.music && next.music === 'off') CH.player.pause();
-    if (next.input !== prev.input) prefetchInputs();
+    if (next.input !== prev.input) cancelSwitch();
+    // The input list covers every input, so one fetch serves any choice.
+    if (next.input !== 'off' && (prev.input === 'off' || !inputs)) prefetchInputs();
   }
 
   function onSettingsKey(key) {
@@ -462,41 +466,77 @@
   // only accepts the TV's own input objects, so the list is fetched ahead of
   // time (at start and whenever Clean Hub comes back) and OK switches at once.
   let inputs = null;
+  let inputsPending = null; // the one query in flight, shared by everyone
+
+  // A late answer (after the platform's deadline) still fills the cache.
+  function storeInputs(found) {
+    inputs = found;
+    return found;
+  }
+
+  function loadInputs() {
+    if (!inputsPending) {
+      inputsPending = CH.platform.listInputs(storeInputs).then(function (found) {
+        inputsPending = null;
+        return storeInputs(found);
+      }, function (err) {
+        inputsPending = null;
+        throw err;
+      });
+    }
+    return inputsPending;
+  }
 
   function prefetchInputs() {
     if (state.settings.input === 'off') return Promise.resolve(null);
-    return CH.platform.listInputs().then(function (found) {
-      inputs = found;
-      return found;
-    }, function () {
-      return null;
-    });
+    return loadInputs().catch(function () { return null; });
+  }
+
+  // One switch at a time; it's dropped if the viewer moves on meanwhile.
+  let switchId = 0;
+  let switching = 0;
+
+  function cancelSwitch() {
+    switching = 0;
+  }
+
+  function stillWanted(id) {
+    return switching === id && !doc.hidden && state.screen === 'home' &&
+      state.settings.input !== 'off' && focusedHomeId() === INPUT.id;
   }
 
   // Points the TV at the chosen HDMI input, then hands the screen to the TV
-  // viewer so the picture and the remote belong to the device there. Clean
-  // Hub stays running in the background.
+  // viewer so the picture and the remote belong to the device there (the TV
+  // shows its own 'No signal' if nothing is plugged in). Clean Hub stays
+  // running in the background.
   function showInput() {
+    if (switching) return; // a second OK while one is under way does nothing
+    const id = ++switchId;
+    switching = id;
+    const done = function () {
+      if (switching === id) switching = 0;
+    };
     const number = Number(state.settings.input.replace('hdmi', ''));
     const label = CH.store.label('input', state.settings.input);
     CH.ui.pressHome(state.homeIndex);
-    (inputs ? Promise.resolve(inputs) : CH.platform.listInputs()).then(function (found) {
-      inputs = found;
-      const all = found.connected.concat(found.disconnected);
+    if (!inputs) CH.ui.toast('Switching to ' + label + '…');
+    (inputs ? Promise.resolve(inputs) : loadInputs()).then(function (found) {
+      if (!stillWanted(id)) return null;
       let source = null;
-      all.forEach(function (s) {
+      found.connected.concat(found.disconnected).forEach(function (s) {
         if (s.type === 'HDMI' && Number(s.number) === number) source = s;
       });
       if (!source) throw new Error(label + ' isn’t on this TV');
-      if (found.connected.indexOf(source) === -1) CH.ui.toast('Nothing seems to be connected to ' + label);
-      return CH.platform.setSource(source);
-    }).then(function () {
-      return CH.platform.launch(TV_VIEWER).catch(function () {
-        CH.platform.hide();
+      return CH.platform.setSource(source).then(function () {
+        if (!stillWanted(id)) return null;
+        CH.ui.clearToast();
+        return CH.platform.launch(TV_VIEWER).catch(function () {
+          if (stillWanted(id)) CH.platform.hide();
+        });
       });
     }).catch(function () {
-      CH.ui.toast('Couldn’t switch to ' + label);
-    });
+      if (switching === id) CH.ui.toast('Couldn’t switch to ' + label);
+    }).then(done, done);
   }
 
   // ---- Ambient ----------------------------------------------------------------
@@ -509,7 +549,9 @@
 
   function saveAmbient(open) {
     try {
-      storage().setItem(AMBIENT_STATE, JSON.stringify({ open: open, track: CH.player.state().index }));
+      const st = CH.player.state();
+      // `wanted`, not `playing`: a power-off pauses the audio but not the wish.
+      storage().setItem(AMBIENT_STATE, JSON.stringify({ open: open, track: st.index, paused: !st.wanted }));
     } catch (e) {
       // Only means Ambient won't come back by itself after a restart.
     }
@@ -549,12 +591,14 @@
     }, CONTROLS_MS);
   }
 
-  function openAmbient() {
+  // play: false when coming back to an Ambient the viewer had paused.
+  function openAmbient(play) {
+    cancelSwitch();
     state.screen = 'ambient';
     CH.ui.openAmbient(true);
     CH.platform.screenSaver(false);
     CH.ui.updateAmbient(CH.player.state(), state.settings.music === 'on');
-    if (state.settings.music === 'on') CH.player.play();
+    if (state.settings.music === 'on' && play !== false) CH.player.play();
     saveAmbient(true);
     tick();
     showControls();
@@ -581,9 +625,11 @@
       return;
     }
     const wasShown = state.controlsShown;
-    showControls();
-    if (!wasShown) return;
     const music = state.settings.music === 'on';
+    showControls();
+    // The first key only wakes the controls, except OK when the status line
+    // is asking for it ('Press OK to play').
+    if (!wasShown && !(key === 'ok' && music && CH.player.state().blocked)) return;
     if (key === 'ok' && music) CH.player.toggle();
     else if (key === 'right' && music) CH.player.next();
     else if (key === 'left' && music) CH.player.previous();
@@ -652,7 +698,7 @@
 
   function tick() {
     root.clearTimeout(clockTimer);
-    if (state.settings.clock === 'off') return;
+    // Runs even with Home's clock off: Ambient always shows its clock.
     const now = CH.platform.now();
     CH.ui.updateClock(now, state.settings.clock);
     // Wake just after the next minute starts.
@@ -697,6 +743,7 @@
   function onVisibility() {
     clearHeld();
     if (doc.hidden) {
+      cancelSwitch();
       CH.player.suspend();
       if (state.screen === 'ambient') CH.platform.screenSaver(true);
       return;
@@ -726,14 +773,15 @@
     const ambient = s ? readAmbient() : {};
     CH.player.init(CH.playlist, ambient.track, onPlayer);
     // Left on Ambient (e.g. the TV went off with it showing): come back to it.
-    if (ambient.open && state.settings.ambient === 'on') openAmbient();
+    if (ambient.open && state.settings.ambient === 'on') openAmbient(!ambient.paused);
     doc.addEventListener('keydown', onKey);
     doc.addEventListener('keyup', onKeyUp);
     doc.addEventListener('visibilitychange', onVisibility);
     root.addEventListener('blur', clearHeld);
     // Let the first frame and key presses through before the slow app list.
     root.setTimeout(function () {
-      refreshApps().then(prefetchInputs);
+      refreshApps();
+      prefetchInputs();
     }, cached ? 600 : 0);
   }
 

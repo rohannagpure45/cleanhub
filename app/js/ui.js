@@ -694,6 +694,11 @@
     }, 3200);
   }
 
+  function clearToast() {
+    root.clearTimeout(toastTimer);
+    doc.getElementById('toast').classList.remove('is-shown');
+  }
+
   function init() {
     sheet.el = doc.getElementById('sheet');
     amb.el = doc.getElementById('ambient');
@@ -720,6 +725,7 @@
     showAmbientControls: showAmbientControls,
     moveAmbientText: moveAmbientText,
     toast: toast,
+    clearToast: clearToast,
     scrollOffset: scrollOffset,
     listFirst: listFirst
   };

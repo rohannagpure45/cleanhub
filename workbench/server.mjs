@@ -2,7 +2,7 @@
 // app's scripts. Nothing here ships to the TV.
 //   npm run dev            -> http://127.0.0.1:8777/
 //   ?apps=typical|many|none|unknown   ?listFail=1   ?fail=<appId>,<appId>
-//   ?music=broken|none   (swaps the Ambient playlist; see playlistFor)
+//   ?music=gap|broken|none   (swaps the Ambient playlist; see playlistFor)
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
@@ -28,6 +28,11 @@ const TYPES = {
 function playlistFor(req, body) {
   const ref = req.headers.referer ? new URL(req.headers.referer).searchParams.get('music') : null;
   if (ref === 'none') return body.replace(/CH\.playlist = [\s\S]*?\];/, 'CH.playlist = [];');
+  if (ref === 'gap') {
+    return body.replace(/CH\.playlist = [\s\S]*?\];/,
+      'CH.playlist = [{ "file": "01-lamp-light.m4a", "title": "Lamp Light" }, { "file": "missing.m4a", "title": "Gone" }, ' +
+      '{ "file": "03-quiet-harbor.m4a", "title": "Quiet Harbor" }];');
+  }
   if (ref === 'broken') {
     return body.replace(/CH\.playlist = [\s\S]*?\];/,
       'CH.playlist = [{ "file": "missing-1.m4a", "title": "Gone" }, { "file": "missing-2.m4a", "title": "Also gone" }];');

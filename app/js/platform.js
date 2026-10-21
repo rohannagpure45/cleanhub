@@ -109,19 +109,31 @@
 
   // The TV's inputs, e.g. connected: [{ type: 'HDMI', number: 2 }]. Needs no
   // privilege. Keeps Tizen's own objects so setSource gets what it expects.
-  function listInputs() {
+  // Takes ~3.3 s on the QN85B. Like listApps, a deadline rejects it, and an
+  // answer after that goes to `onLate`.
+  function listInputs(onLate) {
     return new Promise(function (resolve, reject) {
       if (!onTV() || !tizen().systeminfo) {
         reject(new Error('Not running on a TV'));
         return;
       }
+      let late = false;
+      const timer = root.setTimeout(function () {
+        late = true;
+        reject(new Error('The TV did not list its inputs'));
+      }, TIMEOUT_MS);
       try {
         tizen().systeminfo.getPropertyValue('VIDEOSOURCE', function (v) {
-          resolve({ connected: v.connected || [], disconnected: v.disconnected || [] });
+          root.clearTimeout(timer);
+          const found = { connected: v.connected || [], disconnected: v.disconnected || [] };
+          if (!late) resolve(found);
+          else if (onLate) onLate(found);
         }, function (err) {
+          root.clearTimeout(timer);
           reject(new Error(err && err.message ? err.message : 'VIDEOSOURCE failed'));
         });
       } catch (e) {
+        root.clearTimeout(timer);
         reject(e);
       }
     });
@@ -130,11 +142,19 @@
   // Points the TV's main picture at an input (tv.window privilege).
   function setSource(source) {
     return new Promise(function (resolve, reject) {
+      const timer = root.setTimeout(function () {
+        reject(new Error('The TV did not switch input'));
+      }, TIMEOUT_MS);
       try {
-        tizen().tvwindow.setSource(source, function () { resolve(); }, function (err) {
+        tizen().tvwindow.setSource(source, function () {
+          root.clearTimeout(timer);
+          resolve();
+        }, function (err) {
+          root.clearTimeout(timer);
           reject(new Error(err && err.message ? err.message : 'setSource failed'));
         });
       } catch (e) {
+        root.clearTimeout(timer);
         reject(e);
       }
     });

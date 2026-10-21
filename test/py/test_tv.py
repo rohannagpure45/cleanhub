@@ -171,3 +171,24 @@ class SetupTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DebugPortTest(unittest.TestCase):
+    """`sdb shell 0 debug` prints the port and then keeps the session open."""
+
+    def spawn(self, script):
+        import subprocess
+        return subprocess.Popen([sys.executable, "-c", script], stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+
+    def test_port_in_a_chunk_with_other_lines(self):
+        proc = self.spawn("import sys, time; sys.stdout.write('status\\n... successfully launched pid = 6674 with debug 1 port: 43665\\n'); sys.stdout.flush(); time.sleep(30)")
+        self.assertEqual(tv.read_debug_port(proc, 10), 43665)
+        self.assertIsNotNone(proc.poll(), "the sdb process is stopped")
+
+    def test_a_stalled_partial_line_still_times_out(self):
+        import time
+        proc = self.spawn("import sys, time; sys.stdout.write('... '); sys.stdout.flush(); time.sleep(30)")
+        start = time.time()
+        self.assertIsNone(tv.read_debug_port(proc, 2))
+        self.assertLess(time.time() - start, 8)

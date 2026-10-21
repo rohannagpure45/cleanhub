@@ -588,6 +588,34 @@ def cmd_uninstall(args):
     say("✓ Clean Hub removed from the TV.")
 
 
+def read_debug_port(proc, seconds):
+    """The debugger port from `sdb shell 0 debug`, which prints
+    '... successfully launched pid = N with debug 1 port: P' and then stays
+    open. Reads raw chunks (never readline, which could block past the
+    deadline or hide a buffered line from select) and stops the process."""
+    buf = b""
+    deadline = time.time() + seconds
+    try:
+        while time.time() < deadline:
+            ready, _, _ = select.select([proc.stdout], [], [], 0.5)
+            if not ready:
+                continue
+            chunk = os.read(proc.stdout.fileno(), 4096)
+            if not chunk:
+                break
+            buf += chunk
+            m = re.search(rb"port:\s*(\d+)", buf)
+            if m:
+                return int(m.group(1))
+        return None
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
 def cmd_debug(args):
     """Relaunches Clean Hub in debug mode and saves its DevTools endpoint for
     scripts/tv-inspect.mjs. Debug launches only start from a stopped app."""
@@ -597,23 +625,8 @@ def cmd_debug(args):
     connect(tv)
     sdb(tv, "shell", "0", "was_kill", app_id.split(".")[0], timeout=30)
     proc = subprocess.Popen([str(SDB), "-s", f"{tv}:{SDB_PORT}", "shell", "0", "debug", app_id],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    port = None
-    deadline = time.time() + 40
-    try:
-        while time.time() < deadline:
-            ready, _, _ = select.select([proc.stdout], [], [], 1)
-            if not ready:
-                continue
-            line = proc.stdout.readline()
-            if not line:
-                break
-            m = re.search(r"port:\s*(\d+)", line)
-            if m:
-                port = int(m.group(1))
-                break
-    finally:
-        proc.terminate()
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+    port = read_debug_port(proc, 40)
     if not port:
         fail("The TV didn't start Clean Hub in debug mode. Is Developer Mode still on for this Mac?")
     save_json("debug.json", {"host": tv, "port": port})

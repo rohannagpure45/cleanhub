@@ -1,6 +1,8 @@
 // The Ambient screen's music: the bundled playlist (music/playlist.js) on a
 // loop through one <audio> element (Samsung's documented pattern: switch src
-// on 'ended'). A watchdog moves on if playback ever stalls, since it runs all day.
+// on 'ended'). It runs all day, so every way it can stop is handled: a track
+// that won't play is skipped, a stall is caught by a watchdog, and once no
+// track will play it stops trying.
 (function (root) {
   'use strict';
   const CH = root.CleanHub = root.CleanHub || {};
@@ -11,7 +13,7 @@
     audio: null,
     wanted: false, // the viewer wants music (survives the app being hidden)
     blocked: false, // the browser refused to start without a key press
-    errors: 0, // failed tracks in a row
+    failed: {}, // indexes of tracks that wouldn't play since one last did
     onChange: null,
     retry: null,
     watch: null,
@@ -19,21 +21,14 @@
   };
 
   const WATCH_MS = 30000;
+  const SKIP_MS = 1500;
 
-  // Every 30 s while music should be playing: if the position hasn't moved,
-  // skip to the next track.
-  function watchdog() {
-    root.clearTimeout(p.watch);
-    p.watch = root.setTimeout(function () {
-      const a = p.audio;
-      if (!p.wanted || !a || a.paused) return;
-      if (a.currentTime === p.lastTime) {
-        step(1);
-      } else {
-        p.lastTime = a.currentTime;
-      }
-      watchdog();
-    }, WATCH_MS);
+  function failedCount() {
+    return Object.keys(p.failed).length;
+  }
+
+  function broken() {
+    return p.list.length > 0 && failedCount() >= p.list.length;
   }
 
   function notify() {
@@ -41,15 +36,38 @@
   }
 
   function state() {
+    const a = p.audio;
     return {
       track: p.list[p.index] || null,
       index: p.index,
       count: p.list.length,
-      playing: !!(p.audio && !p.audio.paused && p.wanted),
+      playing: !!(a && !a.paused && !a.error && p.wanted),
       wanted: p.wanted,
       blocked: p.blocked,
-      broken: p.list.length > 0 && p.errors >= p.list.length
+      broken: broken()
     };
+  }
+
+  // Every 30 s while music should be playing. A frozen position means a
+  // stall: move on. A pause nobody asked for (or a failed track the app was
+  // hidden on) is restarted. Nothing to do once no track will play.
+  function watchdog() {
+    root.clearTimeout(p.watch);
+    p.watch = root.setTimeout(function () {
+      const a = p.audio;
+      if (!p.wanted || !a || broken()) return;
+      if (a.paused || a.error) {
+        if (!p.blocked) {
+          if (a.error) step(1);
+          else play();
+        }
+        watchdog();
+        return;
+      }
+      if (a.currentTime === p.lastTime) step(1);
+      else p.lastTime = a.currentTime;
+      watchdog();
+    }, WATCH_MS);
   }
 
   function audio() {
@@ -58,19 +76,22 @@
     a.preload = 'auto';
     a.addEventListener('ended', function () { step(1); });
     a.addEventListener('playing', function () {
-      p.errors = 0;
+      p.failed = {};
       p.blocked = false;
       p.lastTime = -1;
       notify();
     });
     a.addEventListener('pause', notify);
-    // A file that won't play is skipped; if none will, stop trying.
+    // A file that won't play is skipped; once none will, stop trying.
     a.addEventListener('error', function () {
-      p.errors++;
+      const failedIndex = p.index;
+      p.failed[failedIndex] = true;
       notify();
-      if (p.errors < p.list.length && p.wanted) {
+      if (!broken() && p.wanted) {
         root.clearTimeout(p.retry);
-        p.retry = root.setTimeout(function () { step(1); }, 1500);
+        p.retry = root.setTimeout(function () {
+          if (p.index === failedIndex && p.wanted) step(1);
+        }, SKIP_MS);
       }
     });
     p.audio = a;
@@ -79,6 +100,7 @@
 
   function load(index) {
     const n = p.list.length;
+    root.clearTimeout(p.retry); // a pending skip belonged to the old track
     p.index = ((index % n) + n) % n;
     audio().src = 'music/' + p.list[p.index].file;
     notify();
@@ -88,7 +110,8 @@
     if (!p.list.length) return;
     p.wanted = true;
     const a = audio();
-    if (!a.src) load(p.index);
+    // A failed source stays failed; reload it so it errors (and skips) again.
+    if (!a.src || a.error) load(p.index);
     const started = a.play();
     watchdog();
     if (started && typeof started.catch === 'function') {
@@ -105,6 +128,7 @@
   function pause() {
     p.wanted = false;
     root.clearTimeout(p.watch);
+    root.clearTimeout(p.retry);
     if (p.audio) p.audio.pause();
     notify();
   }
@@ -117,7 +141,7 @@
 
   // Previous restarts the current track first, like any music player.
   function previous() {
-    if (p.audio && p.audio.currentTime > 5) {
+    if (p.audio && !p.audio.error && p.audio.currentTime > 5) {
       p.audio.currentTime = 0;
       if (p.wanted) play();
       return;
@@ -133,8 +157,9 @@
     },
     play: play,
     pause: pause,
+    // Same test as the on-screen hint: OK on 'Play' plays, on 'Pause' pauses.
     toggle: function () {
-      if (p.wanted && !p.blocked) pause();
+      if (state().playing) pause();
       else play();
     },
     next: function () { step(1); },
@@ -145,8 +170,11 @@
       root.clearTimeout(p.watch);
       if (p.audio) p.audio.pause();
     },
+    // Back in front: carry on, or move past a track that failed while hidden.
     resume: function () {
-      if (p.wanted) play();
+      if (!p.wanted) return;
+      if (p.audio && p.audio.error) step(1);
+      else play();
     },
     state: state
   };

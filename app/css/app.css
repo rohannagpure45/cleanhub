@@ -127,7 +127,7 @@ html[data-theme="paper"] .glass { background-image: url(../img/bg-paper-blur.jpg
   text-shadow: var(--text-shadow);
 }
 
-html[data-clock="off"] .clock {
+html[data-clock="off"] .home .clock {
   display: none;
 }
 
@@ -407,18 +407,18 @@ html[data-focus="type"] .list-row.is-focused {
 
 /* Dock layout */
 
-html[data-layout="dock"] .clock-time {
+html[data-layout="dock"] .home .clock-time {
   font-size: 168px;
   font-weight: 400;
   letter-spacing: -0.035em;
 }
 
-html[data-layout="dock"] .clock-ampm {
+html[data-layout="dock"] .home .clock-ampm {
   font-size: 44px;
   font-weight: 400;
 }
 
-html[data-layout="dock"] .clock-date {
+html[data-layout="dock"] .home .clock-date {
   margin-top: 20px;
   font-size: 38px;
 }
@@ -826,6 +826,7 @@ html[data-theme="paper"] .is-on .check {
 
 .toast {
   position: absolute;
+  z-index: 20; /* above Ambient */
   left: 0;
   right: 0;
   bottom: 64px;
