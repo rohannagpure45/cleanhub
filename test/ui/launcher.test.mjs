@@ -14,7 +14,8 @@ let errors;
 before(async () => {
   server = await start(0);
   base = `http://127.0.0.1:${server.address().port}/`;
-  browser = await chromium.launch();
+  // A TV app may start music without a key press; desktop Chromium needs telling.
+  browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
 });
 
 after(async () => {
@@ -33,16 +34,16 @@ beforeEach(async () => {
 const DEFAULT_HOME = ['Netflix', 'YouTube', 'Prime Video', 'Disney+', 'Max', 'Plex', 'Tubi', 'Spotify'];
 const S = (o = {}) => Object.assign({ v: 1, layout: 'list', theme: 'dusk', font: 'manrope', focus: 'glass', icons: 'on', clock: '12', apps: null }, o);
 
-async function open(query = '', { settings, wait = true } = {}) {
-  if (settings) {
-    // Seed once per test; later reloads keep whatever the app saved.
-    await page.addInitScript((s) => {
-      if (!sessionStorage.getItem('seeded')) {
-        localStorage.setItem('cleanhub.settings', JSON.stringify(s));
-        sessionStorage.setItem('seeded', '1');
-      }
-    }, settings);
-  }
+// Most tests are about apps, so they start with Ambient hidden; the Ambient
+// tests pass settings that show it.
+async function open(query = '', { settings = S({ ambient: 'off' }), wait = true } = {}) {
+  // Seed once per test; later reloads keep whatever the app saved.
+  await page.addInitScript((s) => {
+    if (!sessionStorage.getItem('seeded')) {
+      localStorage.setItem('cleanhub.settings', JSON.stringify(s));
+      sessionStorage.setItem('seeded', '1');
+    }
+  }, settings);
   await page.goto(base + query);
   if (wait) await page.waitForFunction(() => window.CleanHub.main.state.fresh);
 }
@@ -240,7 +241,7 @@ test('settings change the layout, and the choice survives a restart', async () =
 });
 
 test('the dock is centred, fits 8 apps, and the first focus ring is not clipped', async () => {
-  await open('', { settings: S({ layout: 'dock' }) });
+  await open('', { settings: S({ layout: 'dock', ambient: 'off' }) });
   const g = await page.evaluate(() => {
     const dock = document.querySelector('.dock').getBoundingClientRect();
     const view = document.querySelector('.dock-view').getBoundingClientRect();
@@ -254,7 +255,7 @@ test('the dock is centred, fits 8 apps, and the first focus ring is not clipped'
 });
 
 test('a long dock scrolls with cues, and long names are cut with an ellipsis', async () => {
-  await open('?apps=many', { settings: S({ layout: 'dock' }) });
+  await open('?apps=many', { settings: S({ layout: 'dock', ambient: 'off' }) });
   await seedHome(30);
   const cues = () => page.$$eval('.cue-dock', (els) => els.map((c) => c.classList.contains('is-shown')));
   assert.deepEqual(await cues(), [false, true]);
@@ -287,7 +288,7 @@ test('reset needs a second OK, and confirms in the sheet rather than a toast', a
   await press('ArrowDown', 2); // Background
   await press('ArrowRight');
   assert.equal((await state()).settings.theme, 'tide');
-  await press('ArrowDown', 5); // Reset
+  await press('ArrowDown', 8); // Reset
   await press('Enter');
   assert.equal((await state()).settings.theme, 'tide', 'first OK only asks');
   assert.match(await focusedSheet(), /Press OK again/);
@@ -465,7 +466,7 @@ test('apps uninstalled while away disappear; installed ones show up', async () =
 });
 
 test('a saved app follows its new id (HBO Max to Max)', async () => {
-  await open('', { settings: S({ apps: ['cj37Ni3qXM.HBONow', 'org.tizen.netflix-app'] }) });
+  await open('', { settings: S({ ambient: 'off', apps: ['cj37Ni3qXM.HBONow', 'org.tizen.netflix-app'] }) });
   assert.deepEqual(await homeNames(), ['Max', 'Netflix']);
   assert.deepEqual((await state()).settings.apps, ['5b8c3eb16b.BeamCTVDev', 'org.tizen.netflix-app']);
 });
@@ -521,4 +522,160 @@ test('clock follows the 12/24-hour and off settings', async () => {
   assert.deepEqual(fmt[1], { time: '21:05', ampm: '', date: 'Tuesday, October 20' });
   assert.equal(fmt[2].time, '12:07');
   assert.equal(fmt[2].ampm, 'AM');
+});
+
+// ---- Ambient ----------------------------------------------------------------------
+
+const AMB = () => page.evaluate(() => Object.assign({ screen: window.CleanHub.main.state.screen }, window.CleanHub.player.state()));
+const ambientText = () => page.$eval('#ambient .ambient-text', (e) => e.textContent);
+const controlsShown = () => page.$eval('#ambient .ambient-controls', (e) => e.classList.contains('is-shown'));
+
+async function openAmbient(query = '', settings = S()) {
+  await open(query, { settings });
+  assert.equal(await focusedHome(), 'Ambient', 'Ambient is first on Home');
+  await press('Enter');
+  assert.equal((await state()).screen, 'ambient');
+}
+
+test('Ambient is first on Home and plays the bundled jazz', async () => {
+  await openAmbient();
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  const a = await AMB();
+  assert.ok(a.count >= 3, 'a few tracks bundled');
+  assert.equal(a.index, 0);
+  assert.match(await ambientText(), new RegExp(a.track.title));
+  assert.equal(await controlsShown(), true, 'controls show briefly on entry');
+  assert.deepEqual(errors, []);
+});
+
+test('Ambient keys: first press only wakes the controls, then OK, arrows and wallpaper work', async () => {
+  await page.clock.install();
+  await openAmbient();
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  await page.clock.runFor(7000);
+  assert.equal(await controlsShown(), false, 'controls hide by themselves');
+  await press('Enter');
+  assert.equal(await controlsShown(), true);
+  assert.equal((await AMB()).wanted, true, 'that first OK did not pause');
+  await press('Enter');
+  assert.equal((await AMB()).wanted, false, 'paused');
+  await press('Enter');
+  await press('ArrowRight');
+  assert.equal((await AMB()).index, 1, 'next track');
+  await press('ArrowLeft');
+  assert.equal((await AMB()).index, 0, 'previous track');
+  await press('ArrowDown');
+  assert.equal(await page.getAttribute('html', 'data-wallpaper'), 'midnight');
+  await press('ArrowDown');
+  assert.equal(await page.getAttribute('html', 'data-wallpaper'), 'black');
+  assert.equal((await state()).settings.wallpaper, 'black', 'saved');
+});
+
+test('Back leaves Ambient, stops the music and keeps focus on it', async () => {
+  await openAmbient();
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  await press('Escape');
+  const a = await AMB();
+  assert.equal(a.screen, 'home');
+  assert.equal(a.wanted, false);
+  assert.equal(await focusedHome(), 'Ambient');
+});
+
+test('Ambient comes back by itself after a restart (TV switched off on it)', async () => {
+  await openAmbient();
+  await press('Enter');
+  await press('ArrowRight'); // track 2
+  await reload();
+  const a = await AMB();
+  assert.equal(a.screen, 'ambient');
+  assert.equal(a.index, 1, 'same track');
+});
+
+test('Ambient pauses when the TV hides the app and resumes when it comes back', async () => {
+  await openAmbient();
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+  await page.evaluate(() => window.__mock.goHidden());
+  assert.equal(await page.evaluate(() => document.querySelector('audio') === null && window.CleanHub.player.state().playing), false);
+  await page.waitForFunction(() => !window.CleanHub.player.state().playing);
+  await page.evaluate(() => window.__mock.returnFromApp());
+  await page.waitForFunction(() => window.CleanHub.player.state().playing, null, { timeout: 5000 });
+});
+
+test('the Ambient clock moves to another corner every few minutes', async () => {
+  await page.clock.install();
+  await openAmbient();
+  const spot = () => page.$eval('#ambient .ambient-text', (e) => e.className.match(/spot-\w+/)[0]);
+  assert.equal(await spot(), 'spot-bl');
+  await page.clock.runFor(4 * 60 * 1000 + 2000);
+  assert.equal(await spot(), 'spot-br');
+});
+
+test('Ambient is nearly black on screen (low power on a local-dimming TV)', async () => {
+  for (const wall of ['lamp', 'midnight', 'black']) {
+    await page.clock.install();
+    await openAmbient('', S({ wallpaper: wall }));
+    await page.clock.runFor(7000); // controls fade away
+    await page.waitForTimeout(400);
+    const png = await page.screenshot();
+    const stats = await page.evaluate(async (b64) => {
+      const img = new Image();
+      img.src = 'data:image/png;base64,' + b64;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = 480; c.height = 270;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, 480, 270);
+      const d = ctx.getImageData(0, 0, 480, 270).data;
+      let sum = 0, black = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const y = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+        sum += y;
+        if (y < 2) black++;
+      }
+      return { apl: sum / (d.length / 4) / 255 * 100, black: black / (d.length / 4) * 100 };
+    }, png.toString('base64'));
+    assert.ok(stats.apl < 2, `${wall}: average picture level ${stats.apl.toFixed(2)}% should be under 2%`);
+    assert.ok(stats.black > 70, `${wall}: ${stats.black.toFixed(0)}% of the screen is black`);
+    await page.close();
+    page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
+  }
+});
+
+test('Settings can hide Ambient from Home or turn its music off', async () => {
+  await open('', { settings: S() });
+  assert.equal(await focusedHome(), 'Ambient');
+  await openSettings();
+  const rows = await page.$$eval('#sheet .sheet-label', (els) => els.map((e) => e.textContent));
+  await press('ArrowDown', rows.indexOf('Ambient music'));
+  await press('ArrowRight');
+  assert.equal((await state()).settings.music, 'off');
+  await press('ArrowUp', 2); // Ambient on Home
+  await press('ArrowRight');
+  assert.equal((await state()).settings.ambient, 'off');
+  await press('Escape');
+  assert.ok(!(await homeNames()).includes('Ambient'));
+  await press('ArrowRight');
+  await press('Enter');
+  await press('ArrowDown', rows.indexOf('Ambient on Home'));
+  await press('ArrowRight');
+  await press('Escape');
+  await press('ArrowLeft');
+  assert.equal(await focusedHome(), 'Netflix', 'back from Settings to the remembered app');
+  await press('ArrowUp');
+  assert.equal(await focusedHome(), 'Ambient');
+  await press('Enter');
+  await page.waitForTimeout(300);
+  assert.equal((await AMB()).wanted, false, 'music off: nothing plays');
+  assert.match(await ambientText(), /Music off/);
+});
+
+test('if no track will play, Ambient says so instead of looping', async () => {
+  await openAmbient('?music=broken');
+  await page.waitForFunction(() => window.CleanHub.player.state().broken, null, { timeout: 8000 });
+  assert.match(await ambientText(), /can’t play/);
+});
+
+test('with no music bundled, Ambient is a quiet wallpaper', async () => {
+  await openAmbient('?music=none');
+  assert.match(await ambientText(), /No music bundled/);
 });

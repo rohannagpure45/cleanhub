@@ -218,10 +218,17 @@ def mac_ip_for(tv):
         s.close()
 
 
-def tv_rest(tv):
-    """Samsung's local API reports Developer Mode and the trusted host."""
-    with urllib.request.urlopen(f"http://{tv}:8001/api/v2/", timeout=5) as r:
-        return json.load(r)
+def tv_rest(tv, tries=3):
+    """Samsung's local API reports Developer Mode and the trusted host. It can
+    take a few seconds to answer after the TV starts, so try again."""
+    for attempt in range(tries):
+        try:
+            with urllib.request.urlopen(f"http://{tv}:8001/api/v2/", timeout=5) as r:
+                return json.load(r)
+        except OSError:
+            if attempt == tries - 1:
+                raise
+            time.sleep(3)
 
 
 def port_open(tv, port=SDB_PORT):

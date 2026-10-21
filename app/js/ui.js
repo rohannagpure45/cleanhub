@@ -52,6 +52,7 @@
     html.setAttribute('data-focus', settings.focus);
     html.setAttribute('data-icons', settings.icons);
     html.setAttribute('data-clock', settings.clock);
+    html.setAttribute('data-wallpaper', settings.wallpaper);
   }
 
   // Lines the pre-blurred background up with a panel, so the panel reads as
@@ -109,13 +110,14 @@
     return el;
   }
 
+  // Home's clock and the Ambient screen's clock.
   function updateClock(date, mode) {
-    const el = doc.querySelector('.clock');
-    if (!el || mode === 'off') return;
-    const parts = formatClock(date, mode);
-    el.querySelector('.clock-time').textContent = parts.time;
-    el.querySelector('.clock-ampm').textContent = parts.ampm;
-    el.querySelector('.clock-date').textContent = parts.date;
+    const parts = formatClock(date, mode === 'off' ? '12' : mode);
+    Array.prototype.forEach.call(doc.querySelectorAll('.clock'), function (el) {
+      el.querySelector('.clock-time').textContent = parts.time;
+      el.querySelector('.clock-ampm').textContent = parts.ampm;
+      el.querySelector('.clock-date').textContent = parts.date;
+    });
   }
 
   // ---- Tiles ---------------------------------------------------------------
@@ -126,6 +128,11 @@
     const el = h('span', 'tile');
     el.style.backgroundColor = entry.bg;
     el.style.color = entry.fg;
+    if (entry.svg) {
+      el.className += ' tile-glyph';
+      el.innerHTML = entry.svg;
+      return el;
+    }
     el.appendChild(h('span', 'tile-mono', entry.mono));
     const url = CH.platform.iconUrl(entry.icon);
     if (url) {
@@ -199,7 +206,9 @@
     const track = h('div', 'list-track');
     const pill = h('div', 'pill');
     track.appendChild(pill);
-    if (note) container.appendChild(h('div', 'empty list-empty', note));
+    // With nothing to list the note takes the list's place; otherwise (only
+    // Ambient, say) it sits under the rows.
+    if (note && !entries.length) container.appendChild(h('div', 'empty list-empty', note));
     entries.forEach(function (entry, i) {
       const row = h('div', 'list-row' + (!focus.gear && i === focus.index ? ' is-focused' : ''));
       row.setAttribute('data-index', String(i));
@@ -210,6 +219,7 @@
       track.appendChild(row);
       home.items.push(row);
     });
+    if (note && entries.length) track.appendChild(h('div', 'empty list-note', note));
     view.appendChild(track);
     container.appendChild(view);
     home.cueBefore = cue('cue-list cue-up', ICONS.up);
@@ -437,17 +447,13 @@
     sheetFrame('Settings', ctx.version ? 'Clean Hub ' + ctx.version : '',
       [['◀ ▶', 'Change'], ['OK', 'Open'], ['Back', 'Close']]);
     const count = ctx.homeCount === 1 ? '1 app' : ctx.homeCount + ' apps';
-    const rows = [
-      actionRow('apps', 'Apps on Home', count),
-      optionRow('layout', 'Layout', settings),
-      optionRow('theme', 'Background', settings),
-      optionRow('font', 'Font', settings),
-      optionRow('focus', 'Focus style', settings),
-      optionRow('icons', 'Icons in list', settings),
-      optionRow('clock', 'Clock', settings),
-      actionRow('reset', ctx.confirmReset ? 'Press OK again to reset everything' : 'Reset to defaults', '', true)
-    ];
-    rows.forEach(function (row, i) { addRow(row, i === focusIndex); });
+    CH.settingRows.forEach(function (r, i) {
+      let row;
+      if (r.id === 'apps') row = actionRow('apps', r.label, count);
+      else if (r.id === 'reset') row = actionRow('reset', ctx.confirmReset ? 'Press OK again to reset everything' : r.label, '', true);
+      else row = optionRow(r.id, r.label, settings);
+      addRow(row, i === focusIndex);
+    });
     alignGlass(sheet.el);
     focusSheet(focusIndex, true);
   }
@@ -572,6 +578,89 @@
     dimHome(open);
   }
 
+  // ---- Ambient -------------------------------------------------------------------
+
+  // A near-black wallpaper with a small, dim clock and the track name. Nothing
+  // animates: the text block moves to another corner every few minutes (so no
+  // spot stays lit all day) and the clock changes once a minute.
+  const AMBIENT_SPOTS = ['spot-bl', 'spot-br', 'spot-tr', 'spot-tl'];
+
+  const amb = {
+    el: null,
+    text: null,
+    title: null,
+    status: null,
+    controls: null,
+    controlsTitle: null,
+    controlsArtist: null,
+    hint: null,
+    spot: 0
+  };
+
+  function renderAmbient() {
+    const el = amb.el;
+    el.innerHTML = '';
+    el.appendChild(h('div', 'ambient-wall'));
+    const text = h('div', 'ambient-text ' + AMBIENT_SPOTS[amb.spot]);
+    text.appendChild(clockEl());
+    const now = h('div', 'ambient-now');
+    amb.title = h('span', 'ambient-title');
+    amb.status = h('span', 'ambient-status');
+    now.appendChild(amb.title);
+    now.appendChild(amb.status);
+    text.appendChild(now);
+    el.appendChild(text);
+    const controls = h('div', 'ambient-controls');
+    amb.controlsTitle = h('div', 'ambient-controls-title');
+    amb.controlsArtist = h('div', 'ambient-controls-artist');
+    amb.hint = h('div', 'ambient-hint');
+    controls.appendChild(amb.controlsTitle);
+    controls.appendChild(amb.controlsArtist);
+    controls.appendChild(amb.hint);
+    el.appendChild(controls);
+    amb.text = text;
+    amb.controls = controls;
+  }
+
+  function openAmbient(open) {
+    amb.el.classList.toggle('is-open', open);
+  }
+
+  // st: CH.player.state(); musicOn: the Ambient music setting.
+  function updateAmbient(st, musicOn) {
+    const t = st.track;
+    let status = '';
+    if (!musicOn) status = 'Music off';
+    else if (!st.count) status = 'No music bundled';
+    else if (st.broken) status = 'Music can’t play on this TV';
+    else if (st.blocked) status = 'Press OK to play';
+    else if (!st.playing) status = 'Paused';
+    amb.title.textContent = musicOn && t ? t.title : '';
+    amb.status.textContent = status;
+    amb.controlsTitle.textContent = musicOn && t ? t.title : 'Ambient';
+    amb.controlsArtist.textContent = musicOn && t ? [t.artist, t.year].filter(Boolean).join(' · ') : status;
+    const keys = musicOn && st.count
+      ? [['OK', st.playing ? 'Pause' : 'Play'], ['◀ ▶', 'Track'], ['▲ ▼', 'Wallpaper'], ['Back', 'Home']]
+      : [['▲ ▼', 'Wallpaper'], ['Back', 'Home']];
+    fillHint(amb.hint, keys);
+  }
+
+  function showAmbientControls(show) {
+    amb.controls.classList.toggle('is-shown', show);
+  }
+
+  // Fades the text out, moves it to the next corner, fades it back in.
+  function moveAmbientText() {
+    const text = amb.text;
+    text.classList.add('is-moving');
+    root.setTimeout(function () {
+      text.classList.remove(AMBIENT_SPOTS[amb.spot]);
+      amb.spot = (amb.spot + 1) % AMBIENT_SPOTS.length;
+      text.classList.add(AMBIENT_SPOTS[amb.spot]);
+      text.classList.remove('is-moving');
+    }, 1600);
+  }
+
   // ---- Messages --------------------------------------------------------------
 
   let toastTimer = null;
@@ -607,6 +696,8 @@
 
   function init() {
     sheet.el = doc.getElementById('sheet');
+    amb.el = doc.getElementById('ambient');
+    renderAmbient();
   }
 
   CH.ui = {
@@ -624,6 +715,10 @@
     moveAppsRow: moveAppsRow,
     focusSheet: focusSheet,
     openSheet: openSheet,
+    openAmbient: openAmbient,
+    updateAmbient: updateAmbient,
+    showAmbientControls: showAmbientControls,
+    moveAmbientText: moveAmbientText,
     toast: toast,
     scrollOffset: scrollOffset,
     listFirst: listFirst

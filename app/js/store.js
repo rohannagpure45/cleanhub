@@ -15,6 +15,9 @@
     focus: 'glass',
     icons: 'on',
     clock: '12',
+    ambient: 'on',
+    wallpaper: 'lamp',
+    music: 'on',
     apps: null // null = not chosen yet; the home screen picks recognised apps
   };
 

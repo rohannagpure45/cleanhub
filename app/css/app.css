@@ -854,3 +854,136 @@ html[data-theme="paper"] .is-on .check {
 html[data-layout="dock"] .toast {
   bottom: 440px;
 }
+
+.list-note {
+  padding: 28px 32px 0;
+}
+
+.tile-glyph svg {
+  width: 56%;
+  height: 56%;
+}
+
+/* Ambient ---------------------------------------------------------------- */
+/* Built to leave on all day on a mini-LED panel: almost all black (dark zones
+   switch their LEDs off), one small dim text block, no animation except a
+   slow fade when the block moves corners every few minutes. */
+
+.ambient {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  z-index: 10;
+  display: none;
+  background: #000;
+  color: #6E6255;
+  font-family: var(--font);
+}
+
+.ambient.is-open {
+  display: block;
+}
+
+.ambient-wall {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  background: #000 no-repeat 0 0;
+  background-size: 1920px 1080px;
+}
+
+html[data-wallpaper="lamp"] .ambient-wall { background-image: url(../img/ambient-lamp.jpg); }
+html[data-wallpaper="midnight"] .ambient-wall { background-image: url(../img/ambient-midnight.jpg); }
+
+.ambient-text {
+  position: absolute;
+  opacity: 1;
+  transition: opacity 1500ms linear;
+}
+
+.ambient-text.is-moving {
+  opacity: 0;
+}
+
+.ambient-text.spot-bl { left: 128px; bottom: 96px; }
+.ambient-text.spot-br { right: 128px; bottom: 96px; text-align: right; }
+.ambient-text.spot-tr { right: 128px; top: 96px; text-align: right; }
+.ambient-text.spot-tl { left: 128px; top: 96px; }
+
+.ambient .clock {
+  position: static;
+  text-shadow: none;
+}
+
+.ambient .clock-time {
+  font-size: 72px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.ambient .clock-ampm,
+.ambient .clock-date {
+  color: #4A4139;
+}
+
+.ambient .clock-date {
+  margin-top: 10px;
+  font-size: 30px;
+}
+
+.ambient-now {
+  margin-top: 18px;
+  font-size: 28px;
+  color: #4A4139;
+}
+
+.ambient-status {
+  margin-left: 0;
+}
+
+.ambient-title + .ambient-status:not(:empty) {
+  margin-left: 16px;
+}
+
+/* Shown for a few seconds after a key press. */
+.ambient-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 420px;
+  text-align: center;
+  color: #B9AC9C;
+  opacity: 0;
+  transition: opacity 300ms linear;
+}
+
+.ambient-controls.is-shown {
+  opacity: 1;
+}
+
+.ambient-controls-title {
+  font-size: 56px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.ambient-controls-artist {
+  margin-top: 14px;
+  font-size: 32px;
+  color: #7E7264;
+}
+
+.ambient-hint {
+  margin-top: 44px;
+  font-size: 28px;
+  color: #7E7264;
+}
+
+.ambient .key {
+  color: #B9AC9C;
+  box-shadow: inset 0 0 0 2px #3A332C;
+}

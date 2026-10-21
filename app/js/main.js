@@ -25,10 +25,25 @@
     moving: -1, // index in the apps sheet of the app being moved
     movingId: null,
     movingSaved: null, // settings.apps before the move, for Back = cancel
-    confirmReset: false
+    confirmReset: false,
+    controlsShown: false // Ambient's overlay
   };
 
   const APPS_CACHE = 'cleanhub.apps';
+  const AMBIENT_STATE = 'cleanhub.ambient';
+
+  // Ambient sits first on Home (unless hidden in Settings). It isn't a TV app:
+  // it never goes in the saved app list.
+  const AMBIENT = {
+    id: 'cleanhub:ambient',
+    name: 'Ambient',
+    key: 'ambient',
+    builtin: true,
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
+    bg: '#16110D',
+    fg: '#E3B97A'
+  };
 
   function storage() {
     try {
@@ -73,6 +88,11 @@
     return state.home.map(function (e) { return e.id; });
   }
 
+  // What Home shows: Ambient, then the apps.
+  function homeItems() {
+    return state.settings.ambient === 'on' ? [AMBIENT].concat(state.home) : state.home;
+  }
+
   // The saved list, made explicit the first time the viewer edits it.
   function chosenIds() {
     return Array.isArray(state.settings.apps) ? state.settings.apps.slice() : homeIds();
@@ -107,24 +127,26 @@
   // Settings has focus while a sheet is open (sheets open from it), or when
   // the viewer put it there, or when there is nothing else.
   function onGear() {
-    return state.screen !== 'home' || state.homeOnGear || !state.home.length;
+    return (state.screen !== 'home' && state.screen !== 'ambient') || state.homeOnGear || !homeItems().length;
   }
 
   function renderHome(keepId) {
+    const items = homeItems();
     let index = state.homeIndex;
     if (keepId) {
-      const found = homeIds().indexOf(keepId);
-      if (found !== -1) index = found;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].id === keepId) index = i;
+      }
     }
-    state.homeIndex = Math.max(0, Math.min(state.home.length - 1, index));
-    CH.ui.renderHome(doc.getElementById('home'), state.home, state.settings, homeNote(),
+    state.homeIndex = Math.max(0, Math.min(items.length - 1, index));
+    CH.ui.renderHome(doc.getElementById('home'), items, state.settings, homeNote(),
       { index: state.homeIndex, gear: onGear() });
     tick();
   }
 
   function focusedHomeId() {
     if (onGear()) return null;
-    const e = state.home[state.homeIndex];
+    const e = homeItems()[state.homeIndex];
     return e ? e.id : null;
   }
 
@@ -133,13 +155,15 @@
   function onHomeKey(key) {
     const dock = state.settings.layout === 'dock';
     if (key === 'ok') {
+      const item = homeItems()[state.homeIndex];
       if (onGear()) openSettings();
-      else launch(state.home[state.homeIndex]);
+      else if (item && item.builtin) openAmbient();
+      else launch(item);
       return;
     }
     if (onGear()) {
       const back = key === 'back' || (dock ? key === 'down' : key === 'left' || key === 'down');
-      if (back && state.home.length) {
+      if (back && homeItems().length) {
         state.homeOnGear = false;
         CH.ui.focusHome(state.homeIndex, false);
       }
@@ -152,7 +176,7 @@
     }
     const d = CH.focus.delta(state.settings.layout, key);
     if (!d) return; // Back on Home does nothing: this is the home screen.
-    const next = CH.focus.step(state.homeIndex, state.home.length, d);
+    const next = CH.focus.step(state.homeIndex, homeItems().length, d);
     if (next !== state.homeIndex) {
       state.homeIndex = next;
       CH.ui.focusHome(next, false);
@@ -169,7 +193,7 @@
 
   // ---- Settings --------------------------------------------------------------
 
-  const SETTING_ROWS = ['apps', 'layout', 'theme', 'font', 'focus', 'icons', 'clock', 'reset'];
+  const SETTING_ROWS = CH.settingRows.map(function (r) { return r.id; });
 
   function renderSettings() {
     CH.ui.renderSettings(state.settings, {
@@ -198,12 +222,16 @@
 
   // Applies a settings change everywhere it shows.
   function changeSettings(next) {
-    const relayout = next.layout !== state.settings.layout || next.clock !== state.settings.clock ||
-      next.icons !== state.settings.icons;
+    const prev = state.settings;
+    const relayout = next.layout !== prev.layout || next.clock !== prev.clock ||
+      next.icons !== prev.icons || next.ambient !== prev.ambient;
+    // Remember the app by id: showing or hiding Ambient shifts every index.
+    const remembered = homeItems()[state.homeIndex];
     state.settings = next;
     save();
     CH.ui.applyLook(next);
-    if (relayout) renderHome(null);
+    if (relayout) renderHome(remembered ? remembered.id : null);
+    if (next.music !== prev.music && next.music === 'off') CH.player.pause();
   }
 
   function onSettingsKey(key) {
@@ -406,6 +434,98 @@
     }
   }
 
+  // ---- Ambient ----------------------------------------------------------------
+
+  // Moves the clock to another corner every few minutes while Ambient shows.
+  const AMBIENT_MOVE_MS = 4 * 60 * 1000;
+  const CONTROLS_MS = 6000;
+  let moveTimer = null;
+  let controlsTimer = null;
+
+  function saveAmbient(open) {
+    try {
+      storage().setItem(AMBIENT_STATE, JSON.stringify({ open: open, track: CH.player.state().index }));
+    } catch (e) {
+      // Only means Ambient won't come back by itself after a restart.
+    }
+  }
+
+  function readAmbient() {
+    try {
+      return JSON.parse(storage().getItem(AMBIENT_STATE)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function onPlayer() {
+    if (state.screen === 'ambient') {
+      CH.ui.updateAmbient(CH.player.state(), state.settings.music === 'on');
+      saveAmbient(true);
+    }
+  }
+
+  function scheduleMove() {
+    root.clearTimeout(moveTimer);
+    moveTimer = root.setTimeout(function () {
+      if (state.screen !== 'ambient') return;
+      CH.ui.moveAmbientText();
+      scheduleMove();
+    }, AMBIENT_MOVE_MS);
+  }
+
+  function showControls() {
+    state.controlsShown = true;
+    CH.ui.showAmbientControls(true);
+    root.clearTimeout(controlsTimer);
+    controlsTimer = root.setTimeout(function () {
+      state.controlsShown = false;
+      CH.ui.showAmbientControls(false);
+    }, CONTROLS_MS);
+  }
+
+  function openAmbient() {
+    state.screen = 'ambient';
+    CH.ui.openAmbient(true);
+    CH.ui.updateAmbient(CH.player.state(), state.settings.music === 'on');
+    if (state.settings.music === 'on') CH.player.play();
+    saveAmbient(true);
+    tick();
+    showControls();
+    scheduleMove();
+  }
+
+  function closeAmbient() {
+    state.screen = 'home';
+    root.clearTimeout(moveTimer);
+    root.clearTimeout(controlsTimer);
+    state.controlsShown = false;
+    CH.ui.showAmbientControls(false);
+    CH.player.pause();
+    CH.ui.openAmbient(false);
+    saveAmbient(false);
+    CH.ui.focusHome(state.homeIndex, onGear());
+  }
+
+  // The overlay is hidden most of the time; the first key just shows it.
+  function onAmbientKey(key) {
+    if (key === 'back') {
+      closeAmbient();
+      return;
+    }
+    const wasShown = state.controlsShown;
+    showControls();
+    if (!wasShown) return;
+    const music = state.settings.music === 'on';
+    if (key === 'ok' && music) CH.player.toggle();
+    else if (key === 'right' && music) CH.player.next();
+    else if (key === 'left' && music) CH.player.previous();
+    else if (key === 'up' || key === 'down') {
+      changeSettings(CH.store.cycle(state.settings, 'wallpaper', key === 'down' ? 1 : -1));
+    }
+    CH.ui.updateAmbient(CH.player.state(), music);
+  }
+
   // ---- Data ------------------------------------------------------------------
 
   function setRaw(raw) {
@@ -496,6 +616,7 @@
     event.preventDefault();
     if ((key === 'ok' || key === 'back') && isHeld(event)) return;
     if (state.screen === 'home') onHomeKey(key);
+    else if (state.screen === 'ambient') onAmbientKey(key);
     else if (state.screen === 'settings') onSettingsKey(key);
     else if (state.screen === 'apps') onAppsKey(key);
   }
@@ -508,9 +629,16 @@
   // were paused while hidden.
   function onVisibility() {
     clearHeld();
-    if (doc.hidden) return;
+    if (doc.hidden) {
+      CH.player.suspend();
+      return;
+    }
     tick();
     refreshApps();
+    if (state.screen === 'ambient') {
+      CH.player.resume();
+      scheduleMove();
+    }
   }
 
   function start() {
@@ -525,6 +653,10 @@
       arrangeHome();
     }
     renderHome(null);
+    const ambient = s ? readAmbient() : {};
+    CH.player.init(CH.playlist, ambient.track, onPlayer);
+    // Left on Ambient (e.g. the TV went off with it showing): come back to it.
+    if (ambient.open && state.settings.ambient === 'on') openAmbient();
     doc.addEventListener('keydown', onKey);
     doc.addEventListener('keyup', onKeyUp);
     doc.addEventListener('visibilitychange', onVisibility);

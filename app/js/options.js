@@ -33,6 +33,35 @@
       { id: '12', name: '12-hour' },
       { id: '24', name: '24-hour' },
       { id: 'off', name: 'Off' }
+    ],
+    ambient: [
+      { id: 'on', name: 'Shown' },
+      { id: 'off', name: 'Hidden' }
+    ],
+    wallpaper: [
+      { id: 'lamp', name: 'Lamp' },
+      { id: 'midnight', name: 'Midnight' },
+      { id: 'black', name: 'Black' }
+    ],
+    music: [
+      { id: 'on', name: 'On' },
+      { id: 'off', name: 'Off' }
     ]
   };
+
+  // The settings sheet, top to bottom. 'action' rows open or do something;
+  // the rest cycle through CH.options[id].
+  CH.settingRows = [
+    { id: 'apps', kind: 'action', label: 'Apps on Home' },
+    { id: 'layout', label: 'Layout' },
+    { id: 'theme', label: 'Background' },
+    { id: 'font', label: 'Font' },
+    { id: 'focus', label: 'Focus style' },
+    { id: 'icons', label: 'Icons in list' },
+    { id: 'clock', label: 'Clock' },
+    { id: 'ambient', label: 'Ambient on Home' },
+    { id: 'wallpaper', label: 'Ambient wallpaper' },
+    { id: 'music', label: 'Ambient music' },
+    { id: 'reset', kind: 'action', label: 'Reset to defaults' }
+  ];
 })(typeof window !== 'undefined' ? window : globalThis);
