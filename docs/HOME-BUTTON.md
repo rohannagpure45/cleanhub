@@ -63,7 +63,9 @@ shows the stick:
     in, the stick claims the TV over HDMI-CEC and Samsung's viewer takes the
     screen. The watcher waits 1.5 s, for the stick's second claim to land on
     that viewer, then brings Clean Hub back. The TV keeps Clean Hub's picture
-    throughout; it's the hand-overs that blink.
+    throughout; it's the hand-overs that blink. It doesn't always keep the
+    sound (seen with a soundbar on StbEmu channels), so on each return
+    Clean Hub chooses the input again, which brings it back without a blink.
   - Number and channel keys don't reach the stick (its API has no such keys).
   - The Fire TV tile opens the stick's own Home screen, the only way there;
     an app's tile (StbEmu) opens that app. Holding Back can't stand in for the

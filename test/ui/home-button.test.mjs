@@ -308,6 +308,8 @@ test('the stick claiming the TV moments after keeps the picture; Home later goes
   assert.equal((await app()).screen, 'source');
   assert.equal(await html('data-source'), 'on');
   assert.ok(await mock('tvWindow'));
+  await page.waitForFunction(() => window.__mock.sources.length === 2);
+  assert.deepEqual(await mock('sources'), ['HDMI 4', 'HDMI 4'], 'the input chosen again: the TV can lose its sound in the takeover');
   await later(10000);
   await page.evaluate(() => window.__mock.goHidden()); // Home
   await later(800);

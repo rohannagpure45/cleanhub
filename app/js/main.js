@@ -615,6 +615,7 @@
         if (!stillWanted(id)) return null;
         CH.ui.clearToast();
         if (app) openOnFireTv(app);
+        pictureSource = source;
         if (pictureInHub()) return showSource(label, app);
         leave('input');
         return CH.platform.launch(TV_VIEWER).catch(function () {
@@ -648,6 +649,20 @@
   let sourceAt = 0; // when the picture last showed, or the stick was woken
   let sourceShown = null; // the TV's input while Clean Hub is (or was last) on screen
   let sourceBefore = null; // ...as it was before Clean Hub's latest return
+  let pictureSource = null; // the input the Fire TV picture shows, as the TV listed it
+
+  // Back from the stick's takeover, the TV keeps the picture but sometimes
+  // not its sound (silent until the input is chosen again, seen on the
+  // QN85B). Choosing the same input again brings the sound back, with no
+  // blink and no new takeover.
+  function keepSound() {
+    if (!pictureSource) return;
+    CH.platform.setSource(pictureSource).then(function () {
+      trace('picture-sound');
+    }, function () {
+      trace('picture-sound', { failed: true });
+    });
+  }
 
   function pictureInHub() {
     return state.settings.firetvView === 'hub' && homeOn();
@@ -847,6 +862,7 @@
     if (state.screen === 'source' && Date.now() - sourceAt < TAKEOVER_MS) {
       trace('brought', { as: 'takeover' });
       CH.ui.showSource(true); // the TV kept the picture
+      keepSound();
       return;
     }
     const now = CH.platform.sourceNow();
