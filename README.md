@@ -56,9 +56,14 @@ stay as they are, a Settings row away.
   Clean Hub*, Clean Hub shows the stick's picture itself, so Home works over it
   too. The Samsung remote's arrows, OK, Back and play/pause reach the stick
   over the network, and the picture blinks twice as it opens.
-- **Fire TV apps on Home.** An app on the Fire Stick (StbEmu, say) can have
-  its own item: one press switches to the stick and has it open that app
+- **Fire TV apps on Home.** An app on the Fire Stick (StbEmu or DS photo,
+  say) can have its own item: one press switches to the stick and has it open
+  that app
   (see [docs/TV-SETUP.md](docs/TV-SETUP.md#fire-tv-apps-on-home)).
+- **Fire TV shortcuts.** A recorded way into a Fire TV app: *Basketball*
+  opens StbEmu and goes to Sports → Basketball. Record it once from the Mac
+  with `tv.py firetv record` (see
+  [docs/TV-SETUP.md](docs/TV-SETUP.md#fire-tv-shortcuts)).
 - **Settings is the button top right.** Press ▶ from the list, or ▲ from the
   dock; ◀, ▼ or Back returns to your app.
 - **Your apps, your order.** Settings → Apps on Home. OK adds an app; on an
@@ -74,8 +79,11 @@ stay as they are, a Settings row away.
 - **Fast on the TV.** Backgrounds and their frosted "glass" copies are
   pre-rendered images, and focus moves only animate `transform` and `opacity`.
   Nothing blurs or repaints the full screen as you move.
-- **Offline.** Fonts, images and music are bundled. The only network traffic
-  is to your own Fire TV Stick, when you open one of its apps from Home.
+- **Offline.** Fonts, images and music are bundled, and nothing leaves your
+  home network. The Home watcher asks the TV's own local API which app is on
+  screen, and the Fire TV service talks only to your Fire TV Stick: to open
+  its apps and shortcuts, and to pass the remote's keys on with Fire TV
+  picture: In Clean Hub.
 
 ![Ambient](docs/screens/ambient-lamp.png)
 
@@ -113,8 +121,9 @@ side. Every kind of reel, from the split-screen story to the DVD logo:
   `scripts/app-icons.json`). Other apps use the TV's icon, or a monogram tile
   when the TV won't hand one to a web app.
 - **Tested on the QN85B itself** (Tizen 6.5): the app list, icons, launching,
-  Ambient's music, the moving wallpapers (all at 60 fps), Brainrot mode and
-  the HDMI switch were checked live over the TV's debugger. If an app is ever
+  Ambient's music, the moving wallpapers (all at 60 fps), Brainrot mode, the
+  HDMI switch, the Home button and the Fire TV apps (StbEmu and DS photo
+  opening on the stick) were checked live over the TV's debugger. If an app is ever
   missing, Settings → Apps on Home → *Show everything the TV lists* rescues
   it.
 
@@ -129,7 +138,10 @@ python3 scripts/tv.py setup                          # once; back up ~/.cleanhub
 python3 scripts/tv.py install --tv <TV IP>
 ```
 
-and pin Clean Hub first in Samsung's app bar.
+and pin Clean Hub first in Samsung's app bar. The Home button comes back to
+Clean Hub as soon as it's installed. For Fire TV apps and shortcuts on Home,
+pair with the stick once (`python3 scripts/tv.py firetv pair`, then `firetv
+add`; see [docs/TV-SETUP.md](docs/TV-SETUP.md#fire-tv-apps-on-home)).
 
 ## Try it on a computer
 
@@ -174,8 +186,8 @@ app/                the .wgt contents that ship to the TV
                     ui.js: DOM; main.js: state and remote keys
                     player.js: Ambient's music; walls.js: its moving wallpapers (generated)
                     brainrot.js: the feed's words; reel.js, reel-more.js: its canvas scenes and sounds
-                    firetv-apps.js: Fire TV apps on Home (tv.py fills it in the build)
-  service/firetv.js background service (Node.js 12) that opens apps on the Fire TV Stick and passes keys to it
+                    firetv-apps.js: Fire TV apps and shortcuts on Home (tv.py fills it in the build)
+  service/firetv.js background service (Node.js 12) that opens apps on the Fire TV Stick, plays shortcuts and passes keys to it
   service/home.js   background service (Node.js 12): the Home watcher
   img/              backgrounds and wallpapers (generated); wall/: the wallpapers' moving layers;
                     apps/: app icons (fetched)

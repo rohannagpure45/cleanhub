@@ -1,7 +1,9 @@
 // Clean Hub's Fire TV service: opens an app on the Fire TV Stick through the
-// stick's own remote-control API, the one Amazon's Fire TV phone app uses, and
-// passes the Samsung remote's keys on to it while Clean Hub shows the stick's
-// picture itself (Settings → Fire TV picture: In Clean Hub).
+// stick's own remote-control API, the one Amazon's Fire TV phone app uses,
+// plays a shortcut's recorded keys in it (Basketball: StbEmu, then the way to
+// its Sports → Basketball list), and passes the Samsung remote's keys on to
+// the stick while Clean Hub shows its picture itself (Settings → Fire TV
+// picture: In Clean Hub).
 //
 // It runs in the TV's background service runtime (Node.js 12), not the page:
 // the API is HTTPS behind Amazon's private certificate, which the page's
@@ -33,6 +35,14 @@ const IDLE_EXIT_MS = 2 * 60 * 1000;
 const KEY_PORT = 'firetv-key';
 const KEY_MS = 1500;
 const KEY_QUEUE = 3; // keys waiting beyond this are dropped, oldest first (a held arrow)
+// A shortcut (`tv.py firetv record`) is an app plus the keys pressed in it,
+// each after the pause recorded before it. The first pause counts from the
+// stick saying it opened the app, which it does before the app has loaded; a
+// stick that was asleep loads it slower than while recording, hence the extra.
+const STEPS_MAX = 60;
+const STEP_WAIT_MAX = 30000;
+const STEP_MIN_MS = 300; // the stick drops keys that come quicker than this
+const FIRST_EXTRA_MS = 1500;
 
 // Clean Hub's names for the remote's keys, and the API call each becomes.
 const KEY_PATHS = {
@@ -45,6 +55,10 @@ const KEY_PATHS = {
   home: '/v1/FireTV?action=home', // the stick's own Home (Back held down)
   play: '/v1/media?action=play' // play/pause
 };
+
+function isKey(name) {
+  return typeof name === 'string' && Object.prototype.hasOwnProperty.call(KEY_PATHS, name);
+}
 
 // One request with a deadline. Resolves { status, body }; rejects on a
 // network error or the deadline. Never keeps the connection open.
@@ -211,6 +225,56 @@ async function openApp(pkg, config, io) {
   return { state: 'unreachable', host: host, detail: last };
 }
 
+// A shortcut's keys as the app control carried them (JSON), or null if they
+// aren't a list of { key, wait } the stick can take.
+function parseSteps(text) {
+  let steps;
+  try {
+    steps = JSON.parse(text);
+  } catch (e) {
+    return null;
+  }
+  if (!Array.isArray(steps) || !steps.length || steps.length > STEPS_MAX) return null;
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    if (!s || !isKey(s.key) || typeof s.wait !== 'number' || !(s.wait >= 0 && s.wait <= STEP_WAIT_MAX)) return null;
+  }
+  return steps.map(function (s) { return { key: s.key, wait: Math.round(s.wait) }; });
+}
+
+// How long to wait before each step when playing a shortcut back.
+function stepWait(step, index) {
+  return Math.max(STEP_MIN_MS, step.wait) + (index === 0 ? FIRST_EXTRA_MS : 0);
+}
+
+// Presses a shortcut's keys on the stick, once its app has opened. A key that
+// gets no answer wakes the stick's remote server and goes once more (as
+// createKeys does). Stops early if `current()` turns false: another request
+// came in. Resolves { state: 'done' | 'stopped' | 'unpaired' | 'unreachable' }.
+async function runSteps(steps, config, host, io, current) {
+  function send(name) {
+    return io.key(host, config.token, name).then(function (r) {
+      if (r.status === 200) return 'sent';
+      if (r.status === 401 || r.status === 403) return 'unpaired';
+      throw new Error('HTTP ' + r.status);
+    });
+  }
+  for (let i = 0; i < steps.length; i++) {
+    await io.sleep(stepWait(steps[i], i));
+    if (current && !current()) return { state: 'stopped', at: i };
+    let result;
+    try {
+      result = await send(steps[i].key).catch(function () {
+        return io.wake(host).then(function () { return send(steps[i].key); });
+      });
+    } catch (e) {
+      return { state: 'unreachable', at: i, detail: String(e && e.message) };
+    }
+    if (result === 'unpaired') return { state: 'unpaired', at: i };
+  }
+  return { state: 'done' };
+}
+
 // Passes keys to the stick one at a time, in order. If it doesn't answer, its
 // remote server has gone to sleep (or hung): wakes it and tries that key once
 // more. Tells the page through `report` when it woke the stick (the stick may
@@ -267,7 +331,7 @@ function createKeys(io, config, report) {
   return {
     // `at`: when the page saw the key (same clock), to time its trip here.
     press: function (name, at) {
-      if (!KEY_PATHS[name]) return Promise.resolve();
+      if (!isKey(name)) return Promise.resolve();
       if (!config || !config.token || !host) {
         report({ kind: 'key', state: 'unpaired' });
         return Promise.resolve();
@@ -285,6 +349,63 @@ function createKeys(io, config, report) {
   };
 }
 
+// Requests from the page to open an app or a shortcut: { package, request,
+// shortcut, steps } as its app control carried them. They run one at a time,
+// in order. Each is numbered ('request') and runs once: the TV can hand the
+// same app control over twice. A newer one stops a shortcut still pressing
+// keys, and doesn't wait for it. `tell` hears every result; `idle` is called
+// whenever there may be nothing left to do (busy() says).
+function createOpener(io, config, tell, idle) {
+  let host = config && config.host; // follows the stick if a search finds it elsewhere
+  let queue = Promise.resolve();
+  let lastRequest = null;
+  let opening = 0;
+  let playing = 0;
+
+  function play(steps, about, mine) {
+    playing++;
+    const current = function () { return opening === mine; };
+    return runSteps(steps, config, host, io, current).then(function (r) {
+      if (r.state !== 'stopped') tell(Object.assign({ kind: 'steps' }, about, r));
+    }, function (err) {
+      tell(Object.assign({ kind: 'steps' }, about, { state: 'unreachable', detail: String(err && err.message) }));
+    }).then(function () {
+      playing--;
+      idle();
+    });
+  }
+
+  function open(req) {
+    if (!req.package) return Promise.resolve();
+    if (req.request) {
+      if (req.request === lastRequest) return Promise.resolve();
+      lastRequest = req.request;
+    }
+    const about = { package: req.package };
+    if (req.request) about.request = req.request; // the page stops sending it again
+    if (req.shortcut) about.shortcut = req.shortcut;
+    const steps = req.steps ? parseSteps(req.steps) : null;
+    if (req.steps && !steps) tell(Object.assign({ kind: 'steps' }, about, { state: 'invalid' }));
+    const mine = ++opening;
+    queue = queue.then(function () {
+      return openApp(req.package, config && Object.assign({}, config, { host: host }), io);
+    }).then(function (result) {
+      if (result.host) host = result.host;
+      tell(Object.assign({}, about, result));
+      if (result.state === 'opened' && steps && opening === mine) play(steps, about, mine);
+    }, function (err) {
+      tell(Object.assign({}, about, { state: 'unreachable', detail: String(err && err.message) }));
+    }).then(idle);
+    return queue;
+  }
+
+  return {
+    open: open,
+    busy: function () { return playing > 0; },
+    host: function () { return host; }
+  };
+}
+
 // ---- Tizen service hooks -----------------------------------------------------
 
 let config = null;
@@ -293,9 +414,13 @@ try {
 } catch (e) {
   config = null; // built without a pairing: every request answers 'unpaired'
 }
-let host = config && config.host; // follows the stick if a search finds it elsewhere
-let queue = Promise.resolve();
 let idleTimer = null;
+let theOpener = null;
+
+function opener() {
+  if (!theOpener) theOpener = createOpener(transport(), config, tell, idleLater);
+  return theOpener;
+}
 
 function tell(result) {
   try {
@@ -341,7 +466,7 @@ function onKey(value) {
     if (k.seq <= lastSeq) return;
     lastSeq = k.seq;
   }
-  if (!keys) keys = createKeys(transport(), config && Object.assign({}, config, { host: host }), tell);
+  if (!keys) keys = createKeys(transport(), config && Object.assign({}, config, { host: opener().host() }), tell);
   idleLater();
   if (k.name === 'wake') keys.wake();
   else if (k.name === 'report') tell({ kind: 'key-report', keys: keys.timings() });
@@ -365,6 +490,10 @@ function listenKeys() {
 function idleLater() {
   clearTimeout(idleTimer);
   idleTimer = setTimeout(function () {
+    if (theOpener && theOpener.busy()) {
+      idleLater();
+      return;
+    }
     try {
       tizen.application.getCurrentApplication().exit();
     } catch (e) {
@@ -378,34 +507,17 @@ module.exports.onStart = function () {
   idleLater();
 };
 
-// A request to open an app. The page sends it again with each key until this
+// One app control can carry an app (or shortcut) to open and a key: both are
+// for now. The page sends an open request again with each key until this
 // answers (platform.js): the TV can hand the service the newest app control
-// in place of an older one, and a key follows the request at once. Numbered
-// ('request'), it runs once.
-let lastRequest = null;
-
-function onOpen(pkg, request) {
-  if (request) {
-    if (request === lastRequest) return;
-    lastRequest = request;
-  }
-  const about = request ? { package: pkg, request: request } : { package: pkg };
-  clearTimeout(idleTimer);
-  const io = transport();
-  queue = queue.then(function () {
-    return openApp(pkg, config && Object.assign({}, config, { host: host }), io);
-  }).then(function (result) {
-    if (result.host) host = result.host;
-    tell(Object.assign({}, about, result));
-  }, function (err) {
-    tell(Object.assign({}, about, { state: 'unreachable', detail: String(err && err.message) }));
-  }).then(idleLater);
-}
-
-// One app control can carry an app to open and a key: both are for now.
+// in place of an older one, and a key follows the request at once. The opener
+// runs each numbered request once.
 module.exports.onRequest = function () {
   const pkg = requested('package');
-  if (pkg) onOpen(pkg, requested('request'));
+  if (pkg) {
+    clearTimeout(idleTimer);
+    opener().open({ package: pkg, request: requested('request'), shortcut: requested('shortcut'), steps: requested('steps') });
+  }
   const key = requested('key');
   if (key) onKey(key);
 };
@@ -417,6 +529,10 @@ module.exports.onStop = function () {
 // For test/unit/firetv-service.test.mjs.
 module.exports.openApp = openApp;
 module.exports.createKeys = createKeys;
+module.exports.parseSteps = parseSteps;
+module.exports.runSteps = runSteps;
+module.exports.createOpener = createOpener;
+module.exports.stepWait = stepWait;
 module.exports.KEY_QUEUE = KEY_QUEUE;
 module.exports.transport = transport;
 module.exports.DEADLINE_MS = DEADLINE_MS;

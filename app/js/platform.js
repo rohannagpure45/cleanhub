@@ -188,9 +188,10 @@
     return opening ? opening.data : null;
   }
 
-  // Hands the service the package to open. Resolves once it has the request;
-  // how it went arrives later through onFireTv.
-  function openOnFireTv(pkg) {
+  // Hands the service the package to open, and for a shortcut its name and
+  // the keys to press there ({ name, steps }). Resolves once it has the
+  // request; how it went arrives later through onFireTv.
+  function openOnFireTv(pkg, shortcut) {
     return new Promise(function (resolve, reject) {
       const t = tizen();
       if (!onTV() || !t.ApplicationControl || !t.application.launchAppControl) {
@@ -203,6 +204,10 @@
         data: [{ key: 'package', value: pkg }, { key: 'request', value: request }],
         until: Date.now() + OPEN_MS
       };
+      if (shortcut) {
+        // In the resent copies too: whichever copy the service gets plays it.
+        mine.data.push({ key: 'shortcut', value: shortcut.name }, { key: 'steps', value: JSON.stringify(shortcut.steps) });
+      }
       opening = mine;
       function failed(err) {
         root.clearTimeout(timer);

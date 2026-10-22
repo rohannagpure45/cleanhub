@@ -442,6 +442,22 @@ test('an unanswered request to open a Fire TV app stops going with the keys once
   assert.equal((await keyToStick()).package, undefined);
 });
 
+test('a Fire TV shortcut\'s keys go with the wake too, so whichever copy the service gets plays it', async () => {
+  await open('?fireApps=2', S({ input: 'hdmi4', firetvView: 'hub' }));
+  await press('ArrowDown');
+  await press('ArrowDown'); // Basketball, after StbEmu
+  await press('Enter');
+  await page.waitForFunction(() => window.CleanHub.main.state.screen === 'source' && window.__mock.tvWindow &&
+    window.__mock.fireTvSaw.length >= 2);
+  const saw = (await mock('fireTvSaw')).filter((d) => d.package);
+  assert.ok(saw.length > 0, 'the open request reached the service');
+  saw.forEach((d) => {
+    assert.deepEqual(d.shortcut, ['Basketball']);
+    assert.equal(JSON.parse(d.steps[0]).length, 4, 'with all its keys, in every copy');
+  });
+  assert.deepEqual(errors, []);
+});
+
 test('through the stick\'s takeover the Fire TV picture stays see-through and isn\'t asked for again; later, away means opaque', async () => {
   await openFireTv();
   assert.equal(await html('data-source'), 'on');

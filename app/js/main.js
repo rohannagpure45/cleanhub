@@ -58,17 +58,37 @@
     fg: '#FF9900'
   };
 
+  // Glyphs a Fire TV shortcut can have (`tv.py firetv record --icon`).
+  const svg = function (body) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+      'stroke-linejoin="round">' + body + '</svg>';
+  };
+  const SHORTCUT_GLYPHS = {
+    basketball: svg('<circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6c2.4 2.4 2.4 10.4 0 12.8' +
+      'M18.4 5.6c-2.4 2.4-2.4 10.4 0 12.8"/>'),
+    football: svg('<path d="M4 20c0-9 7-16 16-16 0 9-7 16-16 16z"/><path d="M9 15l6-6M10 12l2 2M12 10l2 2"/>'),
+    soccer: svg('<circle cx="12" cy="12" r="9"/><path d="M12 8l3.8 2.8-1.5 4.4H9.7l-1.5-4.4z' +
+      'M12 8V3M15.8 10.8l4.6-1.5M14.3 15.2l2.8 4M9.7 15.2l-2.8 4M8.2 10.8L3.6 9.3"/>'),
+    baseball: svg('<circle cx="12" cy="12" r="9"/><path d="M6.5 5a9 9 0 0 1 0 14M17.5 5a9 9 0 0 0 0 14"/>'),
+    hockey: svg('<path d="M6 3l7 15a2 2 0 0 0 1.8 1H20"/><ellipse cx="6" cy="19" rx="3" ry="1.5"/>'),
+    star: svg('<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>')
+  };
+
   // Apps on the Fire TV Stick (js/firetv-apps.js), each after Fire TV on Home:
   // OK switches to the Fire TV input as INPUT does, and has the stick open
-  // the app.
+  // the app. A shortcut is an app plus the keys recorded in it
+  // (`tv.py firetv record`), which the stick then presses.
   const FIRE_APPS = (CH.fireTvApps || []).map(function (a) {
+    const shortcut = Array.isArray(a.steps) && a.steps.length > 0;
     return {
-      id: 'cleanhub:firetv:' + a.package,
+      id: 'cleanhub:firetv:' + a.package + (shortcut ? '#' + a.name : ''),
       name: a.name,
       key: 'firetv',
       builtin: 'firetv',
       package: a.package,
+      steps: shortcut ? a.steps : null,
       mono: a.name.charAt(0).toUpperCase(),
+      svg: shortcut ? SHORTCUT_GLYPHS[a.icon] : undefined,
       bg: INPUT.bg,
       fg: INPUT.fg
     };
@@ -766,7 +786,8 @@
   // be asleep when the TV switches to it.
   function openOnFireTv(item) {
     fireTvNote = null;
-    CH.platform.openOnFireTv(item.package).catch(function () {
+    const shortcut = item.steps ? { name: item.name, steps: item.steps } : null;
+    CH.platform.openOnFireTv(item.package, shortcut).catch(function () {
       fireTvSay('Couldn’t ask the Fire TV to open ' + item.name);
     });
   }
@@ -786,14 +807,23 @@
       }
       return;
     }
+    // A shortcut's keys, after its app opened.
+    if (result.kind === 'steps') {
+      if (result.state === 'done') return;
+      fireTvSay(result.state === 'unpaired' ? 'The Fire TV isn’t paired with Clean Hub (tv.py firetv pair)'
+        : 'Couldn’t finish ' + result.shortcut + ' on the Fire TV');
+      return;
+    }
     if (result.state === 'opened') {
       fireTvNote = null;
       return;
     }
-    let name = 'the app';
-    FIRE_APPS.forEach(function (a) {
-      if (a.package === result.package) name = a.name;
-    });
+    let name = result.shortcut || 'the app';
+    if (!result.shortcut) {
+      FIRE_APPS.forEach(function (a) {
+        if (a.package === result.package && !a.steps) name = a.name;
+      });
+    }
     fireTvSay(result.state === 'unpaired'
       ? 'The Fire TV isn’t paired with Clean Hub (tv.py firetv pair)'
       : 'Couldn’t reach the Fire TV to open ' + name);
