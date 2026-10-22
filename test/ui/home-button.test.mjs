@@ -397,6 +397,49 @@ test('a Fire TV app\'s tile opens that app on the stick, not the stick\'s Home s
   assert.equal((await mock('appControls')).at(-1).data.package[0], 'com.mvas.stb.emu.pro');
 });
 
+const STBEMU = 'com.mvas.stb.emu.pro';
+
+async function openStbEmu() {
+  await open('?fireApps=1', S({ input: 'hdmi4', firetvView: 'hub' }));
+  await press('ArrowDown'); // StbEmu, after Fire TV
+  await press('Enter');
+  await page.waitForFunction(() => window.CleanHub.main.state.screen === 'source' && window.__mock.tvWindow &&
+    window.__mock.fireTvSaw.length >= 2);
+}
+
+// Presses a key in the Fire TV picture; resolves what the service got for it.
+async function keyToStick(key = 'ArrowUp') {
+  const n = (await mock('fireTvSaw')).length;
+  await press(key);
+  await page.waitForFunction((m) => window.__mock.fireTvSaw.length > m, n);
+  return (await mock('fireTvSaw')).at(-1);
+}
+
+test('a Fire TV app opens though the wake sent right behind it takes its place at the service', async () => {
+  await openStbEmu();
+  const saw = await mock('fireTvSaw');
+  assert.ok(saw.every((d) => d.key), 'the TV handed the service the wake, twice, and never the app control before it');
+  assert.ok(saw.some((d) => d.package && d.package[0] === STBEMU), 'the request to open StbEmu came with the wake');
+  assert.deepEqual(errors, []);
+});
+
+test('the request to open a Fire TV app goes with each key until the service answers it', async () => {
+  await openStbEmu();
+  const request = (await mock('appControls')).at(-1).data.request[0];
+  assert.equal((await keyToStick()).request[0], request, 'unanswered: it goes with the key');
+  await page.evaluate((r) => window.__mock.fireTvAnswer({ package: 'com.mvas.stb.emu.pro', request: r, state: 'opened' }),
+    request);
+  const after = await keyToStick();
+  assert.equal(after.package, undefined, 'answered: the key goes alone');
+  assert.equal(JSON.parse(after.key[0]).name, 'up');
+});
+
+test('an unanswered request to open a Fire TV app stops going with the keys once the service would have given up', async () => {
+  await openStbEmu();
+  await later(36000);
+  assert.equal((await keyToStick()).package, undefined);
+});
+
 test('through the stick\'s takeover the Fire TV picture stays see-through and isn\'t asked for again; later, away means opaque', async () => {
   await openFireTv();
   assert.equal(await html('data-source'), 'on');

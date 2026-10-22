@@ -1140,7 +1140,10 @@ test('a Fire TV app sits after Fire TV; OK switches to the input and has the sti
   await press('Enter');
   await page.waitForFunction(() => window.__mock.launches.length === 1);
   assert.deepEqual(await page.evaluate(() => window.__mock.sources), ['HDMI 4']);
-  assert.deepEqual(await page.evaluate(() => window.__mock.appControls), [{
+  const controls = await page.evaluate(() => window.__mock.appControls);
+  assert.match(controls[0].data.request[0], /^\d+-\d+$/, 'numbered: the service runs it once, however often it\'s handed over');
+  delete controls[0].data.request;
+  assert.deepEqual(controls, [{
     id: 'CleanHub01.FireTv',
     operation: 'http://tizen.org/appcontrol/operation/default',
     data: { package: [STBEMU] }

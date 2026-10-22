@@ -378,24 +378,36 @@ module.exports.onStart = function () {
   idleLater();
 };
 
-module.exports.onRequest = function () {
-  const key = requested('key');
-  if (key) {
-    onKey(key);
-    return;
+// A request to open an app. The page sends it again with each key until this
+// answers (platform.js): the TV can hand the service the newest app control
+// in place of an older one, and a key follows the request at once. Numbered
+// ('request'), it runs once.
+let lastRequest = null;
+
+function onOpen(pkg, request) {
+  if (request) {
+    if (request === lastRequest) return;
+    lastRequest = request;
   }
-  const pkg = requested('package');
-  if (!pkg) return;
+  const about = request ? { package: pkg, request: request } : { package: pkg };
   clearTimeout(idleTimer);
   const io = transport();
   queue = queue.then(function () {
     return openApp(pkg, config && Object.assign({}, config, { host: host }), io);
   }).then(function (result) {
     if (result.host) host = result.host;
-    tell(Object.assign({ package: pkg }, result));
+    tell(Object.assign({}, about, result));
   }, function (err) {
-    tell({ package: pkg, state: 'unreachable', detail: String(err && err.message) });
+    tell(Object.assign({}, about, { state: 'unreachable', detail: String(err && err.message) }));
   }).then(idleLater);
+}
+
+// One app control can carry an app to open and a key: both are for now.
+module.exports.onRequest = function () {
+  const pkg = requested('package');
+  if (pkg) onOpen(pkg, requested('request'));
+  const key = requested('key');
+  if (key) onKey(key);
 };
 
 module.exports.onStop = function () {

@@ -111,7 +111,7 @@ stopping the service.
 | `addAppStatusChangeListener`, `getAppsContext` | No signal on Home: the Smart Hub, Samsung's viewer, AirPlay and Settings are always running. |
 | REST API `GET /api/v2/applications/<id>` | `visible` for Clean Hub and store apps, about a second late; 404 for system apps. Can be slow (seconds) while the TV is busy. |
 | Message port, page → service | 0.3–1.9 s. |
-| App control, page → service | 25–150 ms in calm moments. Two sent close together can arrive as the newer one twice, so every message is numbered. |
+| App control, page → service | 25–150 ms in calm moments. Two sent close together can arrive as the newer one twice: the service only ever reads the newest. So every message is numbered, and a request to open a Fire TV app goes again with each key until the service answers (the wake right behind it once took its place, and StbEmu didn't open). |
 | App control, service → page | Reloads the page: never used. Plain `launch()` brings it back as it was. |
 | `tizen.alarm` aimed at the service | Refused ("Error while add alarm to server"). Only the visible app can be an alarm's target. |
 | `tizen.preference` | Not on this TV. The watcher keeps the Home setting in its own file. |

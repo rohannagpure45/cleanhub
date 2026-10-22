@@ -47,6 +47,51 @@ function fakeStick({ wake = [{ status: 201 }], launch = [{ status: 200 }], found
   };
 }
 
+// The service's Tizen hooks against a stand-in TV: `data()` is the app
+// control the TV hands over ([{ key, value: [string] }]); the result has what
+// the service told the page. The repository has no pairing (config.json), so
+// every request answers 'unpaired' without touching the network.
+function fakeTv(data) {
+  const told = [];
+  globalThis.tizen = {
+    application: {
+      getCurrentApplication: () => ({
+        getRequestedAppControl: () => ({ appControl: { data: data() } }),
+        exit: () => {}
+      })
+    },
+    messageport: {
+      requestRemoteMessagePort: () => ({ sendMessage: (d) => d.forEach((m) => told.push(JSON.parse(m.value))) })
+    }
+  };
+  return told;
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+test('an app to open that came with a key, in place of its own app control, opens once, and the key goes too', async () => {
+  let data = [
+    { key: 'key', value: [JSON.stringify({ name: 'up', run: 7, seq: 2 })] },
+    { key: 'package', value: [PKG] },
+    { key: 'request', value: ['7-1'] }
+  ];
+  const told = fakeTv(() => data);
+  try {
+    service.onRequest(); // the TV hands the service the newest app control...
+    service.onRequest(); // ...twice, in place of the open request sent just before
+    await settle();
+    assert.deepEqual(told.filter((t) => t.package), [{ package: PKG, request: '7-1', state: 'unpaired', detail: 'no pairing in this build' }]);
+    assert.deepEqual(told.filter((t) => t.kind === 'key'), [{ kind: 'key', state: 'unpaired' }]);
+    data = [{ key: 'package', value: [PKG] }, { key: 'request', value: ['7-3'] }]; // a new request
+    service.onRequest();
+    await settle();
+    assert.equal(told.filter((t) => t.package).length, 2);
+  } finally {
+    service.onStop();
+    delete globalThis.tizen;
+  }
+});
+
 test('opens the app on the first try when the stick is awake', async () => {
   const stick = fakeStick();
   assert.deepEqual(await service.openApp(PKG, PAIRED, stick.io), { state: 'opened', host: '10.0.0.5' });
