@@ -1140,7 +1140,10 @@ test('a Fire TV app sits after Fire TV; OK switches to the input and has the sti
   await press('Enter');
   await page.waitForFunction(() => window.__mock.launches.length === 1);
   assert.deepEqual(await page.evaluate(() => window.__mock.sources), ['HDMI 4']);
-  assert.deepEqual(await page.evaluate(() => window.__mock.appControls), [{
+  const controls = await page.evaluate(() => window.__mock.appControls);
+  assert.match(controls[0].data.request[0], /^\d+-\d+$/, 'numbered: the service runs it once, however often it\'s handed over');
+  delete controls[0].data.request;
+  assert.deepEqual(controls, [{
     id: 'CleanHub01.FireTv',
     operation: 'http://tizen.org/appcontrol/operation/default',
     data: { package: [STBEMU] }
@@ -1199,6 +1202,55 @@ test('success, or a failure from long ago, says nothing on coming back', async (
   assert.equal(await toastText(), '');
   await answerWhileAway('unreachable', 3 * 60 * 1000);
   assert.equal(await toastText(), '', 'stale news is dropped');
+});
+
+// ---- Fire TV shortcuts (tv.py firetv record) ------------------------------------
+
+test('a shortcut sits after the Fire TV apps with its own glyph; OK opens its app and hands over its keys', async () => {
+  await open('?fireApps=2', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
+  assert.deepEqual((await homeNames()).slice(0, 4), ['Fire TV', 'StbEmu', 'Basketball', 'Netflix']);
+  await press('ArrowDown');
+  await press('ArrowDown');
+  assert.equal(await focusedHome(), 'Basketball');
+  assert.equal(await page.evaluate(() => document.querySelectorAll('#home .is-focused .tile-glyph svg circle').length), 1,
+    'the basketball, not a letter');
+  await press('Enter');
+  await page.waitForFunction(() => window.__mock.launches.length === 1);
+  assert.deepEqual(await page.evaluate(() => window.__mock.sources), ['HDMI 4']);
+  const [control] = await page.evaluate(() => window.__mock.appControls);
+  assert.equal(control.id, 'CleanHub01.FireTv');
+  assert.deepEqual(control.data.package, [STBEMU]);
+  assert.deepEqual(control.data.shortcut, ['Basketball']);
+  assert.deepEqual(JSON.parse(control.data.steps[0]),
+    [{ key: 'down', wait: 4000 }, { key: 'ok', wait: 1200 }, { key: 'down', wait: 600 }, { key: 'ok', wait: 900 }]);
+  assert.deepEqual(await page.evaluate(() => window.__mock.launches), ['org.tizen.tv-viewer']);
+  assert.deepEqual(errors, []);
+});
+
+test('StbEmu itself opens without any keys, though it shares its package with the shortcut', async () => {
+  await open('?fireApps=2', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
+  await press('ArrowDown'); // StbEmu
+  await press('Enter');
+  await page.waitForFunction(() => window.__mock.launches.length === 1);
+  const [control] = await page.evaluate(() => window.__mock.appControls);
+  assert.deepEqual(Object.keys(control.data).sort(), ['package', 'request']);
+});
+
+test('a shortcut that couldn\'t finish says so by name when Clean Hub comes back', async () => {
+  await open('?fireApps=2', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
+  await page.evaluate(() => window.__mock.goHidden());
+  await page.evaluate((p) => window.__mock.fireTvAnswer({ package: p, shortcut: 'Basketball', state: 'opened' }), STBEMU);
+  await page.evaluate((p) => window.__mock.fireTvAnswer({ kind: 'steps', package: p, shortcut: 'Basketball', state: 'unreachable', at: 2 }), STBEMU);
+  await page.evaluate(() => window.__mock.returnFromApp());
+  assert.equal(await toastText(), 'Couldn’t finish Basketball on the Fire TV');
+});
+
+test('a shortcut that finished, or whose app couldn\'t open, is told the usual way', async () => {
+  await open('?fireApps=2', { settings: S({ input: 'hdmi4', ambient: 'off' }) });
+  await page.evaluate((p) => window.__mock.fireTvAnswer({ kind: 'steps', package: p, shortcut: 'Basketball', state: 'done' }), STBEMU);
+  assert.equal(await toastText(), '');
+  await page.evaluate((p) => window.__mock.fireTvAnswer({ package: p, shortcut: 'Basketball', state: 'unreachable' }), STBEMU);
+  assert.equal(await toastText(), 'Couldn’t reach the Fire TV to open Basketball');
 });
 
 test('if the Fire TV service will not start, the input still switches and it says so', async () => {

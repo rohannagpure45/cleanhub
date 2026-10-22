@@ -3,7 +3,7 @@
 //   npm run dev            -> http://127.0.0.1:8777/
 //   ?apps=typical|many|none|unknown   ?listFail=1   ?fail=<appId>,<appId>
 //   ?music=gap|broken|none   (swaps the Ambient playlist; see playlistFor)
-//   ?fireApps=1 (StbEmu as a Fire TV app on Home)   ?fireTvFail=1
+//   ?fireApps=1 (StbEmu as a Fire TV app on Home; =2 adds a Basketball shortcut)   ?fireTvFail=1
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
@@ -72,10 +72,17 @@ export function start(port = PORT) {
           '<script src="/__workbench/mock-tizen.js"></script>\n  <script src="js/catalog.js">');
       }
       if (path === '/music/playlist.js') body = playlistFor(req, String(body));
-      // ?fireApps=1 puts a Fire TV app on Home, as a paired build would.
-      if (path === '/js/firetv-apps.js' && req.headers.referer && new URL(req.headers.referer).searchParams.get('fireApps')) {
-        body = String(body).replace('CH.fireTvApps = [];',
-          'CH.fireTvApps = [{ "name": "StbEmu", "package": "com.mvas.stb.emu.pro" }];');
+      // ?fireApps=1 puts a Fire TV app on Home, as a paired build would;
+      // ?fireApps=2 adds a shortcut in it (Basketball).
+      const fireApps = path === '/js/firetv-apps.js' && req.headers.referer &&
+        new URL(req.headers.referer).searchParams.get('fireApps');
+      if (fireApps) {
+        const apps = [{ name: 'StbEmu', package: 'com.mvas.stb.emu.pro' }];
+        if (fireApps === '2') {
+          apps.push({ name: 'Basketball', package: 'com.mvas.stb.emu.pro', icon: 'basketball',
+            steps: [{ key: 'down', wait: 4000 }, { key: 'ok', wait: 1200 }, { key: 'down', wait: 600 }, { key: 'ok', wait: 900 }] });
+        }
+        body = String(body).replace('CH.fireTvApps = [];', 'CH.fireTvApps = ' + JSON.stringify(apps) + ';');
       }
       // A test playlist replaces the whole list, so the other sets (1920s,
       // the genres, brainrot) stay out.

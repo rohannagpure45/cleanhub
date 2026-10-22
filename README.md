@@ -59,6 +59,10 @@ stay as they are, a Settings row away.
 - **Fire TV apps on Home.** An app on the Fire Stick (StbEmu, say) can have
   its own item: one press switches to the stick and has it open that app
   (see [docs/TV-SETUP.md](docs/TV-SETUP.md#fire-tv-apps-on-home)).
+- **Fire TV shortcuts.** A recorded way into a Fire TV app: *Basketball*
+  opens StbEmu and goes to Sports → Basketball. Record it once from the Mac
+  with `tv.py firetv record` (see
+  [docs/TV-SETUP.md](docs/TV-SETUP.md#fire-tv-shortcuts)).
 - **Settings is the button top right.** Press ▶ from the list, or ▲ from the
   dock; ◀, ▼ or Back returns to your app.
 - **Your apps, your order.** Settings → Apps on Home. OK adds an app; on an
@@ -174,8 +178,8 @@ app/                the .wgt contents that ship to the TV
                     ui.js: DOM; main.js: state and remote keys
                     player.js: Ambient's music; walls.js: its moving wallpapers (generated)
                     brainrot.js: the feed's words; reel.js, reel-more.js: its canvas scenes and sounds
-                    firetv-apps.js: Fire TV apps on Home (tv.py fills it in the build)
-  service/firetv.js background service (Node.js 12) that opens apps on the Fire TV Stick and passes keys to it
+                    firetv-apps.js: Fire TV apps and shortcuts on Home (tv.py fills it in the build)
+  service/firetv.js background service (Node.js 12) that opens apps on the Fire TV Stick, plays shortcuts and passes keys to it
   service/home.js   background service (Node.js 12): the Home watcher
   img/              backgrounds and wallpapers (generated); wall/: the wallpapers' moving layers;
                     apps/: app icons (fetched)

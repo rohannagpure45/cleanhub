@@ -63,7 +63,9 @@ shows the stick:
     in, the stick claims the TV over HDMI-CEC and Samsung's viewer takes the
     screen. The watcher waits 1.5 s, for the stick's second claim to land on
     that viewer, then brings Clean Hub back. The TV keeps Clean Hub's picture
-    throughout; it's the hand-overs that blink.
+    throughout; it's the hand-overs that blink. It doesn't always keep the
+    sound (seen with a soundbar on StbEmu channels), so on each return
+    Clean Hub chooses the input again, which brings it back without a blink.
   - Number and channel keys don't reach the stick (its API has no such keys).
   - The Fire TV tile opens the stick's own Home screen, the only way there;
     an app's tile (StbEmu) opens that app. Holding Back can't stand in for the
@@ -111,7 +113,7 @@ stopping the service.
 | `addAppStatusChangeListener`, `getAppsContext` | No signal on Home: the Smart Hub, Samsung's viewer, AirPlay and Settings are always running. |
 | REST API `GET /api/v2/applications/<id>` | `visible` for Clean Hub and store apps, about a second late; 404 for system apps. Can be slow (seconds) while the TV is busy. |
 | Message port, page → service | 0.3–1.9 s. |
-| App control, page → service | 25–150 ms in calm moments. Two sent close together can arrive as the newer one twice, so every message is numbered. |
+| App control, page → service | 25–150 ms in calm moments. Two sent close together can arrive as the newer one twice: the service only ever reads the newest. So every message is numbered, and a request to open a Fire TV app goes again with each key until the service answers (the wake right behind it once took its place, and StbEmu didn't open). |
 | App control, service → page | Reloads the page: never used. Plain `launch()` brings it back as it was. |
 | `tizen.alarm` aimed at the service | Refused ("Error while add alarm to server"). Only the visible app can be an alarm's target. |
 | `tizen.preference` | Not on this TV. The watcher keeps the Home setting in its own file. |

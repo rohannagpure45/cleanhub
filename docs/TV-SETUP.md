@@ -132,6 +132,50 @@ pairing (after a reset, say): run `firetv pair` and `install` again. If the
 stick won't answer at all, restart it (hold Select + Play/Pause on its remote
 for 5 seconds): its remote-control server can hang until the stick restarts.
 
+## Fire TV shortcuts
+
+A shortcut is a Fire TV app plus the way into it: **Basketball** opens StbEmu
+and goes to Sports → Basketball. It gets its own item on Home, after the Fire
+TV apps. StbEmu has no way to be told "open this category", so a shortcut is
+recorded: you press the keys once, from the Mac, and the TV presses them
+again, with the same pauses, each time you choose it.
+
+With the TV showing the Fire TV:
+
+```sh
+python3 scripts/tv.py firetv record Basketball StbEmu   # opens StbEmu; then drive it from the Mac
+python3 scripts/tv.py firetv run Basketball             # try it, from the Mac
+python3 scripts/tv.py install                           # put it on Home
+```
+
+While recording, the Mac's keyboard is the remote: arrows move, **Enter** is
+OK, **Backspace** is Back, **Space** is Play/Pause. Each key goes to the stick
+as you press it, so watch the TV. Wait for every screen to finish loading
+before the next key: the pause before each key is part of the shortcut. **S**
+saves, **Q** quits without saving. Recording again under the same name
+replaces it.
+
+The app is a Fire TV app on Home by name (StbEmu) or a package name. Home
+shows a glyph if the name says what it is (basketball, football, soccer,
+baseball, hockey); `--icon star` picks one, and `--icon none` keeps the first
+letter. `firetv list` shows each shortcut's keys, and `firetv remove
+Basketball` takes it off (then `install` again).
+
+**How it plays.** The page hands the Fire TV service the app and the keys.
+The service opens the app as for a Fire TV app, waits the recorded pause plus
+1.5 s (the stick says it opened the app before the app has loaded, and a stick
+that was asleep loads it slower), then presses each key after its pause, never
+sooner than 0.3 s after the last. Choosing something else on Home stops a
+shortcut still pressing keys.
+
+**What can go wrong.** A shortcut only knows the keys, not the screen. It
+breaks if the app doesn't start where it did when recorded, for example
+because StbEmu reopens on the channel you were watching instead of its menu,
+or if your provider reorders its categories. Then record it again; starting
+with Back a few times can bring StbEmu to the same screen every time. If a key
+doesn't reach the stick, Clean Hub says *Couldn't finish Basketball on the
+Fire TV* when you come back to it.
+
 ## Ambient: leaving it on all day
 
 Ambient is first on Home. It shows a wallpaper with a small clock that moves

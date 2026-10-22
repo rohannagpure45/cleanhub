@@ -10,6 +10,8 @@ Developer Mode, from this Mac. Standard library only.
   python3 scripts/tv.py debug                          # relaunch for scripts/tv-inspect.mjs
   python3 scripts/tv.py firetv pair                    # once: pair with the Fire TV Stick
   python3 scripts/tv.py firetv add StbEmu com.mvas.stb.emu.pro   # a Fire TV app on Home
+  python3 scripts/tv.py firetv record Basketball StbEmu   # a shortcut: the app, then your way in
+  python3 scripts/tv.py firetv run Basketball            # play it on the stick from this Mac
 
 Signing: 2022 TVs (Tizen 6.5) accept a plain Tizen developer certificate paired
 with the SDK's "old" public distributor certificate, so no Samsung account is
@@ -34,7 +36,9 @@ import socket
 import ssl
 import subprocess
 import sys
+import termios
 import time
+import tty
 import urllib.error
 import urllib.request
 import zipfile
@@ -66,6 +70,31 @@ FIRETV_API_KEY = "0987654321"
 FIRETV_API_PORT = 8080
 FIRETV_DIAL_PORT = 8009
 FIRETV_PACKAGE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$")
+# The stick's keys, as app/service/firetv.js names them.
+FIRETV_KEY_PATHS = {
+    "up": "/v1/FireTV?action=dpad_up",
+    "down": "/v1/FireTV?action=dpad_down",
+    "left": "/v1/FireTV?action=dpad_left",
+    "right": "/v1/FireTV?action=dpad_right",
+    "ok": "/v1/FireTV?action=select",
+    "back": "/v1/FireTV?action=back",
+    "play": "/v1/media?action=play",
+}
+# A shortcut: an app, then keys pressed in it, each after the pause recorded
+# before it. Playing one back keeps to the same rules as the TV's service
+# (app/service/firetv.js: STEPS_MAX, STEP_WAIT_MAX, STEP_MIN_MS, FIRST_EXTRA_MS).
+STEPS_MAX = 60
+STEP_WAIT_MAX = 30000
+STEP_MIN_MS = 300
+FIRST_EXTRA_MS = 1500
+SHORTCUT_ICONS = ("basketball", "football", "soccer", "baseball", "hockey", "star")
+# What the Mac's keyboard sends, in a terminal, for the keys a recording uses.
+TERMINAL_KEYS = {
+    "\x1b[A": "up", "\x1b[B": "down", "\x1b[C": "right", "\x1b[D": "left",
+    "\x1bOA": "up", "\x1bOB": "down", "\x1bOC": "right", "\x1bOD": "left",
+    "\r": "ok", "\n": "ok", "\x7f": "back", "\x08": "back", " ": "play",
+}
+KEY_LABELS = {"up": "↑", "down": "↓", "left": "←", "right": "→", "ok": "OK", "back": "Back", "play": "⏯"}
 
 # Install failures the TV reports, as it prints them (spaces removed), and
 # what they mean here. Bracketed, so timings like "[1163]ms" never match.
@@ -439,7 +468,7 @@ def cmd_package(args, quiet=False):
     app_dir = ROOT / "dist" / "app"
     apps = write_firetv(app_dir, load_json(FIRETV_JSON))
     if apps and not quiet:
-        say(f"  Fire TV apps on Home: {', '.join(a['name'] for a in apps)}")
+        say(f"  Fire TV apps and shortcuts on Home: {', '.join(a['name'] for a in apps)}")
     before = {p: p.stat().st_mtime for p in (ROOT / "dist").glob("*.wgt")}
     code, out = run_pty([TIZEN, "package", "-t", "wgt", "-s", sign["profile"], "-o", ROOT / "dist", "--", app_dir],
                         package_answers(sign["password"]), secrets_to_hide=[sign["password"]])
@@ -768,23 +797,31 @@ def firetv_find(args, config):
 
 
 def write_firetv(app_dir, config):
-    """Puts the pairing and the Fire TV apps into a build (dist/app), never
-    into app/. Unpaired, Home shows no Fire TV apps. Returns the apps."""
+    """Puts the pairing, the Fire TV apps and the shortcuts into a build
+    (dist/app), never into app/. Unpaired, Home shows none of them. Returns
+    what Home will show, shortcuts last."""
     paired = bool(config.get("token") and config.get("host"))
     apps = (config.get("apps") or []) if paired else []
+    shortcuts = (config.get("shortcuts") or []) if paired else []
     pairing = Path(app_dir) / "service" / "config.json"
-    if apps:
+    if apps or shortcuts:
         fd = os.open(pairing, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             json.dump({"host": config["host"], "token": config["token"]}, f)
     elif pairing.exists():
         pairing.unlink()
-    listed = json.dumps([{"name": a["name"], "package": a["package"]} for a in apps], indent=2, ensure_ascii=False)
+    listed = [{"name": a["name"], "package": a["package"]} for a in apps]
+    for s in shortcuts:
+        entry = {"name": s["name"], "package": s["package"], "steps": s["steps"]}
+        if s.get("icon"):
+            entry["icon"] = s["icon"]
+        listed.append(entry)
+    listed = json.dumps(listed, indent=2, ensure_ascii=False)
     (Path(app_dir) / "js" / "firetv-apps.js").write_text(
         "// Written by scripts/tv.py from ~/.cleanhub/firetv.json.\n"
         "(function (root) {\n  'use strict';\n  const CH = root.CleanHub = root.CleanHub || {};\n"
         f"  CH.fireTvApps = {listed};\n}})(typeof window !== 'undefined' ? window : globalThis);\n")
-    return apps
+    return apps + shortcuts
 
 
 def firetv_pair(args, config):
@@ -823,10 +860,13 @@ def firetv_add(args, config):
 
 def firetv_remove(args, config):
     apps = config.get("apps", [])
+    shortcuts = config.get("shortcuts", [])
     keep = [a for a in apps if args.name not in (a["name"], a["package"])]
-    if len(keep) == len(apps):
-        fail(f"No Fire TV app called {args.name}. tv.py firetv list shows them.")
+    keep_shortcuts = [s for s in shortcuts if s["name"] != args.name]
+    if len(keep) == len(apps) and len(keep_shortcuts) == len(shortcuts):
+        fail(f"No Fire TV app or shortcut called {args.name}. tv.py firetv list shows them.")
     config["apps"] = keep
+    config["shortcuts"] = keep_shortcuts
     save_json(FIRETV_JSON, config, private=True)
     say(f"✓ Removed {args.name}. Install to update Home: tv.py install")
 
@@ -840,6 +880,8 @@ def firetv_list(args, config):
         say(f"  {a['name']}: {a['package']}")
     if not config.get("apps"):
         say("  No Fire TV apps on Home: tv.py firetv add <Name> <package>")
+    for s in config.get("shortcuts", []):
+        say(f"  {s['name']} (shortcut in {app_name(s['package'], config)}): {describe_steps(s['steps'])}")
 
 
 def firetv_open(args, config):
@@ -857,10 +899,170 @@ def firetv_open(args, config):
     say(f"✓ Asked the stick to open {args.package}. (It answers OK even for a package it doesn't have.)")
 
 
+# ---- Fire TV shortcuts --------------------------------------------------------
+
+def app_name(package, config):
+    for a in config.get("apps", []):
+        if a["package"] == package:
+            return a["name"]
+    return package
+
+
+def shortcut_app(given, config):
+    """The package for `given`: the name of a Fire TV app on Home, or a package."""
+    for a in config.get("apps", []):
+        if given.lower() in (a["name"].lower(), a["package"].lower()):
+            return a["package"]
+    if FIRETV_PACKAGE.fullmatch(given):
+        return given
+    fail(f"'{given}' is neither a Fire TV app on Home (tv.py firetv list) nor a package name.")
+
+
+def shortcut_icon(name, icon):
+    """The glyph Home shows for a shortcut: --icon, else one its name mentions
+    (Basketball gets the ball), else none (its first letter)."""
+    if icon == "none":
+        return None
+    if icon:
+        if icon not in SHORTCUT_ICONS:
+            fail(f"No icon called {icon}; there are {', '.join(SHORTCUT_ICONS)} (or none).")
+        return icon
+    return next((i for i in SHORTCUT_ICONS if i in name.lower()), None)
+
+
+def describe_steps(steps):
+    seconds = (sum(step_wait(s, i) for i, s in enumerate(steps)) + 500) // 1000
+    presses = "1 press" if len(steps) == 1 else f"{len(steps)} presses"
+    return f"{' '.join(KEY_LABELS[s['key']] for s in steps)} ({presses}, about {seconds} s)"
+
+
+def step_wait(step, index):
+    """Milliseconds to wait before a step when playing it back."""
+    return max(STEP_MIN_MS, step["wait"]) + (FIRST_EXTRA_MS if index == 0 else 0)
+
+
+def record_steps(read_key, send, clock, started):
+    """Turns keyboard presses into a shortcut's steps, sending each key to the
+    stick as it goes so the TV shows where you are. `read_key()` returns what
+    the terminal sent; `send(name)` is True if the stick took the key. Each
+    step's wait is the time since the previous key reached the stick (since
+    `started`, the app opening, for the first). S saves: returns the steps.
+    Q, Esc or Ctrl-C: returns None."""
+    steps = []
+    last = started
+    while True:
+        k = read_key()
+        if k in ("s", "S"):
+            return steps
+        if k in ("q", "Q", "\x1b", "\x03", ""):
+            return None
+        name = TERMINAL_KEYS.get(k)
+        if not name:
+            continue
+        pressed = clock()
+        if send(name):
+            steps.append({"key": name, "wait": min(STEP_WAIT_MAX, round((pressed - last) * 1000))})
+            last = pressed
+            say(f"  {KEY_LABELS[name]}")
+        else:
+            say("  (the stick didn't take that one; press it again)")
+        if len(steps) == STEPS_MAX:
+            say(f"  That's the most a shortcut holds ({STEPS_MAX} presses); saving.")
+            return steps
+
+
+def firetv_key(host, token, name):
+    """Presses a key on the stick. If it doesn't answer, its remote server has
+    gone to sleep: wakes it and tries once more. True if the stick took it."""
+    for attempt in (1, 2):
+        try:
+            status, _ = firetv_api(host, FIRETV_KEY_PATHS[name], token=token, timeout=4)
+        except OSError:
+            status = None
+        if status in (401, 403):
+            fail("The stick no longer knows this pairing. Run: tv.py firetv pair")
+        if status == 200:
+            return True
+        if attempt == 1 and not firetv_wake(host, wait=5):
+            return False
+    return False
+
+
+def firetv_start(args, config, package):
+    """Wakes the stick and opens `package`; returns the stick's address."""
+    if not config.get("token"):
+        fail("Not paired yet: tv.py firetv pair")
+    host = firetv_find(args, config)
+    if not firetv_wake(host):
+        fail("The stick's remote-control service didn't answer. Is the TV showing the Fire TV?")
+    status, answer = firetv_api(host, f"/v1/FireTV/app/{package}", token=config["token"])
+    if status in (401, 403):
+        fail("The stick no longer knows this pairing. Run: tv.py firetv pair")
+    if status != 200:
+        fail(f"The stick said HTTP {status}: {answer}")
+    return host
+
+
+def read_terminal_key(fd):
+    return os.read(fd, 16).decode(errors="replace")
+
+
+def firetv_record(args, config):
+    name = args.name.strip()
+    if not name:
+        fail("Give the shortcut a name for Home, like Basketball.")
+    package = shortcut_app(args.app, config)
+    icon = shortcut_icon(name, args.icon)
+    if not sys.stdin.isatty():
+        fail("Recording reads the arrow keys from this terminal; run it in one.")
+    say(f"Opening {app_name(package, config)} on the Fire TV. Switch the TV to the Fire TV and watch it.")
+    host = firetv_start(args, config, package)
+    started = time.monotonic()
+    say("Now go where the shortcut should take you, as you would with the remote:\n"
+        "  arrows move · Enter is OK · Backspace is Back · Space is Play/Pause\n"
+        "  S saves · Q quits without saving\n"
+        "Wait for each screen to load before the next key: the shortcut keeps your pauses.")
+    fd = sys.stdin.fileno()
+    saved_tty = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        steps = record_steps(lambda: read_terminal_key(fd), lambda k: firetv_key(host, config["token"], k),
+                             time.monotonic, started)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved_tty)
+    if steps is None:
+        say("Nothing saved.")
+        return
+    if not steps:
+        fail("No keys recorded, so nothing saved.")
+    shortcut = {"name": name, "package": package, "steps": steps}
+    if icon:
+        shortcut["icon"] = icon
+    config["shortcuts"] = [s for s in config.get("shortcuts", []) if s["name"] != name] + [shortcut]
+    save_json(FIRETV_JSON, config, private=True)
+    say(f"✓ Saved {name}: {describe_steps(steps)}.")
+    say(f"  Try it from here: tv.py firetv run {name}   Put it on Home: tv.py install")
+
+
+def firetv_run(args, config):
+    """Plays a shortcut on the stick from this Mac, as the TV would."""
+    shortcut = next((s for s in config.get("shortcuts", []) if s["name"].lower() == args.name.lower()), None)
+    if not shortcut:
+        fail(f"No shortcut called {args.name}. tv.py firetv list shows them.")
+    say(f"Opening {app_name(shortcut['package'], config)}, then {describe_steps(shortcut['steps'])}")
+    host = firetv_start(args, config, shortcut["package"])
+    for i, step in enumerate(shortcut["steps"]):
+        time.sleep(step_wait(step, i) / 1000)
+        if not firetv_key(host, config["token"], step["key"]):
+            fail(f"The stick stopped answering at press {i + 1} ({KEY_LABELS[step['key']]}).")
+        say(f"  {KEY_LABELS[step['key']]}")
+    say(f"✓ Played {shortcut['name']}.")
+
+
 def cmd_firetv(args):
     config = load_json(FIRETV_JSON)
     {"pair": firetv_pair, "add": firetv_add, "remove": firetv_remove, "list": firetv_list,
-     "open": firetv_open}[args.action](args, config)
+     "open": firetv_open, "record": firetv_record, "run": firetv_run}[args.action](args, config)
 
 
 def main():
@@ -885,11 +1087,19 @@ def main():
     a = actions.add_parser("add", help="put a Fire TV app on Home")
     a.add_argument("name", help="the name Home shows, e.g. StbEmu")
     a.add_argument("package", help="its Android package, e.g. com.mvas.stb.emu.pro")
-    a = actions.add_parser("remove", help="take a Fire TV app off Home")
-    a.add_argument("name", help="its name or package")
-    actions.add_parser("list", help="show the pairing and the Fire TV apps")
+    a = actions.add_parser("remove", help="take a Fire TV app or shortcut off Home")
+    a.add_argument("name", help="its name (or an app's package)")
+    actions.add_parser("list", help="show the pairing, the Fire TV apps and the shortcuts")
     a = actions.add_parser("open", help="open an app on the stick from this Mac, to try a package name")
     a.add_argument("package")
+    a.add_argument("--firetv", help="the stick's IP address")
+    a = actions.add_parser("record", help="record a shortcut: an app, then the keys to where it should go")
+    a.add_argument("name", help="the name Home shows, e.g. Basketball")
+    a.add_argument("app", help="a Fire TV app on Home (StbEmu) or a package")
+    a.add_argument("--icon", help=f"{', '.join(SHORTCUT_ICONS)} or none (default: from the name)")
+    a.add_argument("--firetv", help="the stick's IP address")
+    a = actions.add_parser("run", help="play a shortcut on the stick from this Mac, to try it")
+    a.add_argument("name")
     a.add_argument("--firetv", help="the stick's IP address")
     args = parser.parse_args()
     {

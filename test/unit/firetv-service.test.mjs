@@ -47,6 +47,51 @@ function fakeStick({ wake = [{ status: 201 }], launch = [{ status: 200 }], found
   };
 }
 
+// The service's Tizen hooks against a stand-in TV: `data()` is the app
+// control the TV hands over ([{ key, value: [string] }]); the result has what
+// the service told the page. The repository has no pairing (config.json), so
+// every request answers 'unpaired' without touching the network.
+function fakeTv(data) {
+  const told = [];
+  globalThis.tizen = {
+    application: {
+      getCurrentApplication: () => ({
+        getRequestedAppControl: () => ({ appControl: { data: data() } }),
+        exit: () => {}
+      })
+    },
+    messageport: {
+      requestRemoteMessagePort: () => ({ sendMessage: (d) => d.forEach((m) => told.push(JSON.parse(m.value))) })
+    }
+  };
+  return told;
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+test('an app to open that came with a key, in place of its own app control, opens once, and the key goes too', async () => {
+  let data = [
+    { key: 'key', value: [JSON.stringify({ name: 'up', run: 7, seq: 2 })] },
+    { key: 'package', value: [PKG] },
+    { key: 'request', value: ['7-1'] }
+  ];
+  const told = fakeTv(() => data);
+  try {
+    service.onRequest(); // the TV hands the service the newest app control...
+    service.onRequest(); // ...twice, in place of the open request sent just before
+    await settle();
+    assert.deepEqual(told.filter((t) => t.package), [{ package: PKG, request: '7-1', state: 'unpaired', detail: 'no pairing in this build' }]);
+    assert.deepEqual(told.filter((t) => t.kind === 'key'), [{ kind: 'key', state: 'unpaired' }]);
+    data = [{ key: 'package', value: [PKG] }, { key: 'request', value: ['7-3'] }]; // a new request
+    service.onRequest();
+    await settle();
+    assert.equal(told.filter((t) => t.package).length, 2);
+  } finally {
+    service.onStop();
+    delete globalThis.tizen;
+  }
+});
+
 test('opens the app on the first try when the stick is awake', async () => {
   const stick = fakeStick();
   assert.deepEqual(await service.openApp(PKG, PAIRED, stick.io), { state: 'opened', host: '10.0.0.5' });
@@ -198,6 +243,156 @@ test('without a pairing, or for a key the stick has no use for, nothing is sent'
   service.createKeys(stick.io, PAIRED, stick.report).press('volume_up');
   assert.deepEqual(stick.log, []);
   assert.deepEqual(stick.told, ['unpaired']);
+});
+
+// ---- Shortcuts (an app, then recorded keys) -----------------------------------
+
+// A stick for shortcuts: opens apps and takes keys at once, answering from a
+// script (the last answer repeats), on a clock only sleeps move.
+function shortcutStick({ launch = [{ status: 200 }], keys = [{ status: 200 }], wake = [{ status: 201 }] } = {}) {
+  let clock = 0;
+  const log = [];
+  const next = (list) => (list.length > 1 ? list.shift() : list[0]);
+  const answer = (a) => (a instanceof Error ? Promise.reject(a) : Promise.resolve(a));
+  const io = {
+    now: () => clock,
+    sleep: (ms) => { clock += ms; log.push(`sleep ${ms}`); return Promise.resolve(); },
+    wake: () => { log.push('wake'); return answer(next(wake)); },
+    launch: (host, token, pkg) => { log.push(`launch ${pkg}`); return answer(next(launch)); },
+    key: (host, token, name) => { log.push(`key ${name} ${host} ${token}`); return answer(next(keys)); },
+    discover: () => Promise.resolve(null)
+  };
+  return { io, log, keys: () => log.filter((l) => l.startsWith('key')).map((l) => l.split(' ')[1]) };
+}
+
+const BASKETBALL = [{ key: 'down', wait: 4000 }, { key: 'ok', wait: 1200 }, { key: 'down', wait: 100 }, { key: 'ok', wait: 900 }];
+
+test('a shortcut\'s keys are checked: known keys, sane pauses, not too many', () => {
+  assert.deepEqual(service.parseSteps(JSON.stringify(BASKETBALL)), BASKETBALL);
+  assert.deepEqual(service.parseSteps('[{"key":"ok","wait":250.6}]'), [{ key: 'ok', wait: 251 }]);
+  for (const bad of ['', 'nope', '{}', '[]', '[{"key":"home2","wait":1}]', '[{"key":"ok"}]',
+    '[{"key":"ok","wait":-1}]', '[{"key":"ok","wait":31000}]', '[null]', '[{"key":"toString","wait":1}]',
+    JSON.stringify(Array.from({ length: 61 }, () => ({ key: 'ok', wait: 1 })))]) {
+    assert.equal(service.parseSteps(bad), null, bad);
+  }
+});
+
+test('playing a shortcut keeps the recorded pauses, with a floor and extra time for the app to load', async () => {
+  const stick = shortcutStick();
+  assert.deepEqual(await service.runSteps(BASKETBALL, PAIRED, '10.0.0.5', stick.io), { state: 'done' });
+  assert.deepEqual(stick.log, [
+    'sleep 5500', 'key down 10.0.0.5 Tok3n',
+    'sleep 1200', 'key ok 10.0.0.5 Tok3n',
+    'sleep 300', 'key down 10.0.0.5 Tok3n', // a quicker press than the stick takes waits for it
+    'sleep 900', 'key ok 10.0.0.5 Tok3n'
+  ]);
+});
+
+test('a shortcut key that gets no answer wakes the stick and goes once more', async () => {
+  const stick = shortcutStick({ keys: [{ status: 200 }, new Error('no answer in 1500 ms'), { status: 200 }] });
+  assert.equal((await service.runSteps(BASKETBALL, PAIRED, '10.0.0.5', stick.io)).state, 'done');
+  assert.deepEqual(stick.keys(), ['down', 'ok', 'ok', 'down', 'ok']);
+  assert.equal(stick.log.filter((l) => l === 'wake').length, 1);
+});
+
+test('a shortcut stops where the stick can\'t be reached, or has forgotten the pairing', async () => {
+  const gone = shortcutStick({ keys: [{ status: 200 }, new Error('EHOSTUNREACH')], wake: [new Error('EHOSTUNREACH')] });
+  assert.deepEqual(await service.runSteps(BASKETBALL, PAIRED, '10.0.0.5', gone.io),
+    { state: 'unreachable', at: 1, detail: 'EHOSTUNREACH' });
+  assert.deepEqual(gone.keys(), ['down', 'ok']);
+  const unpaired = shortcutStick({ keys: [{ status: 403 }] });
+  assert.deepEqual(await service.runSteps(BASKETBALL, PAIRED, '10.0.0.5', unpaired.io), { state: 'unpaired', at: 0 });
+  assert.deepEqual(unpaired.keys(), ['down']);
+});
+
+test('a shortcut stops once something newer is asked for', async () => {
+  const stick = shortcutStick();
+  let left = 2;
+  const result = await service.runSteps(BASKETBALL, PAIRED, '10.0.0.5', stick.io, () => left-- > 0);
+  assert.deepEqual(result, { state: 'stopped', at: 2 });
+  assert.deepEqual(stick.keys(), ['down', 'ok']);
+});
+
+// The page's requests, as the opener gets them from app controls.
+function openerFor(stick, config = PAIRED) {
+  const told = [];
+  let idles = 0;
+  const opener = service.createOpener(stick.io, config, (r) => told.push(r), () => { idles++; });
+  const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+  return { opener, told, settle, idles: () => idles };
+}
+
+test('a shortcut opens its app, presses its keys, and says how both went', async () => {
+  const stick = shortcutStick();
+  const o = openerFor(stick);
+  await o.opener.open({ package: PKG, request: '1-1', shortcut: 'Basketball', steps: JSON.stringify(BASKETBALL) });
+  await o.settle();
+  assert.equal(stick.log[1], `launch ${PKG}`);
+  assert.deepEqual(stick.keys(), ['down', 'ok', 'down', 'ok']);
+  assert.deepEqual(o.told, [
+    { package: PKG, request: '1-1', shortcut: 'Basketball', state: 'opened', host: '10.0.0.5' },
+    { kind: 'steps', package: PKG, request: '1-1', shortcut: 'Basketball', state: 'done' }
+  ], 'each echoes the request, so the page stops sending it again');
+  assert.equal(o.opener.busy(), false);
+  assert.ok(o.idles() >= 2, 'the service may idle out only after the keys');
+});
+
+test('a request the TV hands over twice runs once', async () => {
+  const stick = shortcutStick();
+  const o = openerFor(stick);
+  const req = { package: PKG, request: '7-3', shortcut: 'Basketball', steps: JSON.stringify(BASKETBALL) };
+  o.opener.open(req);
+  o.opener.open(Object.assign({}, req));
+  await o.settle();
+  assert.equal(stick.log.filter((l) => l.startsWith('launch')).length, 1);
+  assert.equal(stick.keys().length, BASKETBALL.length);
+  o.opener.open(Object.assign({}, req, { request: '7-4' }));
+  await o.settle();
+  assert.equal(stick.log.filter((l) => l.startsWith('launch')).length, 2, 'a new number is a new press');
+});
+
+test('a newer request stops a shortcut still pressing keys', async () => {
+  const stick = shortcutStick();
+  let release;
+  stick.io.sleep = (ms) => { stick.log.push(`sleep ${ms}`); return new Promise((r) => { release = r; }); };
+  const o = openerFor(stick);
+  o.opener.open({ package: PKG, request: '1-1', shortcut: 'Basketball', steps: JSON.stringify(BASKETBALL) });
+  await o.settle();
+  assert.equal(o.opener.busy(), true, 'waiting for the app to load');
+  o.opener.open({ package: 'com.synology.dsphoto', request: '1-2' });
+  await o.settle();
+  release();
+  await o.settle();
+  assert.deepEqual(stick.keys(), [], 'no key goes into the other app');
+  assert.equal(o.opener.busy(), false);
+  assert.deepEqual(o.told.map((r) => [r.package, r.kind || '', r.state]),
+    [[PKG, '', 'opened'], ['com.synology.dsphoto', '', 'opened']], 'stopping isn\'t news');
+});
+
+test('keys the service can\'t make sense of are reported, and the app still opens', async () => {
+  const stick = shortcutStick();
+  const o = openerFor(stick);
+  await o.opener.open({ package: PKG, request: '1', shortcut: 'Basketball', steps: '[{"key":"rm -rf","wait":1}]' });
+  await o.settle();
+  assert.deepEqual(stick.keys(), []);
+  assert.deepEqual(o.told.map((r) => r.state), ['invalid', 'opened']);
+});
+
+test('no keys are pressed if the app didn\'t open', async () => {
+  const stick = shortcutStick({ launch: [{ status: 403 }] });
+  const o = openerFor(stick);
+  await o.opener.open({ package: PKG, request: '1', shortcut: 'Basketball', steps: JSON.stringify(BASKETBALL) });
+  await o.settle();
+  assert.deepEqual(stick.keys(), []);
+  assert.deepEqual(o.told.map((r) => r.state), ['unpaired']);
+});
+
+test('a plain app request still just opens the app', async () => {
+  const stick = shortcutStick();
+  const o = openerFor(stick);
+  await o.opener.open({ package: PKG, request: null, shortcut: null, steps: null });
+  await o.settle();
+  assert.deepEqual(o.told, [{ package: PKG, state: 'opened', host: '10.0.0.5' }]);
 });
 
 // ---- Real requests -------------------------------------------------------------

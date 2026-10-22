@@ -170,44 +170,79 @@
   const FIRETV_SERVICE = 'CleanHub01.FireTv';
   const FIRETV_PORT = 'firetv';
 
-  // Hands the service the package to open. Resolves once it has the request;
-  // how it went arrives later through onFireTv.
-  function openOnFireTv(pkg) {
+  // What the page tells its services is numbered (see tellService).
+  const RUN = Date.now();
+  let sent = 0;
+
+  // The request to open an app that the Fire TV service hasn't answered yet.
+  // It goes again with every key sent to the service until then: the TV can
+  // hand a service the newest app control in place of an older one, and in
+  // the Fire TV picture a key (the wake ahead of the first) follows at once.
+  // The service runs each request once. Dropped when the service would have
+  // given up anyway (30 s).
+  const OPEN_MS = 35000;
+  let opening = null; // { request, data: [{ key, value }], until }
+
+  function stillOpening() {
+    if (opening && Date.now() > opening.until) opening = null;
+    return opening ? opening.data : null;
+  }
+
+  // Hands the service the package to open, and for a shortcut its name and
+  // the keys to press there ({ name, steps }). Resolves once it has the
+  // request; how it went arrives later through onFireTv.
+  function openOnFireTv(pkg, shortcut) {
     return new Promise(function (resolve, reject) {
       const t = tizen();
       if (!onTV() || !t.ApplicationControl || !t.application.launchAppControl) {
         reject(new Error('Not running on a TV'));
         return;
       }
+      const request = RUN + '-' + (++sent);
+      const mine = {
+        request: request,
+        data: [{ key: 'package', value: pkg }, { key: 'request', value: request }],
+        until: Date.now() + OPEN_MS
+      };
+      if (shortcut) {
+        // In the resent copies too: whichever copy the service gets plays it.
+        mine.data.push({ key: 'shortcut', value: shortcut.name }, { key: 'steps', value: JSON.stringify(shortcut.steps) });
+      }
+      opening = mine;
+      function failed(err) {
+        root.clearTimeout(timer);
+        if (opening === mine) opening = null; // the page says it couldn't: it mustn't open later
+        reject(err);
+      }
       const timer = root.setTimeout(function () {
-        reject(new Error('The Fire TV service did not start'));
+        failed(new Error('The Fire TV service did not start'));
       }, TIMEOUT_MS);
       try {
         const control = new t.ApplicationControl('http://tizen.org/appcontrol/operation/default', null, null, null,
-          [new t.ApplicationControlData('package', [pkg])]);
+          mine.data.map(function (d) { return new t.ApplicationControlData(d.key, [d.value]); }));
         t.application.launchAppControl(control, FIRETV_SERVICE, function () {
           root.clearTimeout(timer);
           resolve();
         }, function (err) {
-          root.clearTimeout(timer);
-          reject(new Error(err && err.message ? err.message : 'launchAppControl failed'));
+          failed(new Error(err && err.message ? err.message : 'launchAppControl failed'));
         });
       } catch (e) {
-        root.clearTimeout(timer);
-        reject(e);
+        failed(e);
       }
     });
   }
 
   // Calls `listener` with each result the Fire TV service sends back, e.g.
-  // { package, state: 'opened' | 'unpaired' | 'unreachable', detail }.
+  // { package, request, state: 'opened' | 'unpaired' | 'unreachable', detail }.
   function onFireTv(listener) {
     try {
       tizen().messageport.requestLocalMessagePort(FIRETV_PORT).addMessagePortListener(function (data) {
         (data || []).forEach(function (d) {
           if (d.key !== 'result') return;
           try {
-            listener(JSON.parse(d.value));
+            const result = JSON.parse(d.value);
+            if (opening && result && result.request === opening.request) opening = null;
+            listener(result);
           } catch (e) {
             // Not ours, or garbled: nothing useful to show.
           }
@@ -229,17 +264,16 @@
   // message port takes 0.3-1.9 s. (Never so to the page itself: an app
   // control relaunch reloads it.) A message port is the fallback. Messages
   // are numbered: the TV can hand a service the newest app control twice in
-  // place of an older one.
-  const RUN = Date.now();
-  let sent = 0;
-
-  function tellService(service, port, key, message) {
+  // place of an older one. `along`: more { key, value } for the app control.
+  function tellService(service, port, key, message, along) {
     const t = tizen();
     if (!onTV()) return false;
     const value = JSON.stringify(Object.assign({ run: RUN, seq: ++sent }, message));
     try {
-      const control = new t.ApplicationControl('http://tizen.org/appcontrol/operation/default', null, null, null,
-        [new t.ApplicationControlData(key, [value])]);
+      const data = [{ key: key, value: value }].concat(along || []).map(function (d) {
+        return new t.ApplicationControlData(d.key, [d.value]);
+      });
+      const control = new t.ApplicationControl('http://tizen.org/appcontrol/operation/default', null, null, null, data);
       t.application.launchAppControl(control, service, function () {}, function () {});
       return true;
     } catch (e) {
@@ -256,7 +290,7 @@
   // Passes a remote key ('up', 'ok', 'play', …, or 'wake' ahead of the first)
   // to the Fire TV service, which sends it on to the stick.
   function fireTvKey(name) {
-    return tellService(FIRETV_SERVICE, FIRETV_KEY_PORT, 'key', { name: name, at: Date.now() });
+    return tellService(FIRETV_SERVICE, FIRETV_KEY_PORT, 'key', { name: name, at: Date.now() }, stillOpening());
   }
 
   // Shows the TV's main picture (the input setSource chose) full screen,

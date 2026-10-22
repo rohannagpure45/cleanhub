@@ -50,6 +50,7 @@
 
   var launches = [];
   var failList = (params.get('fail') || '').split(',');
+  var newest = {}; // the last app control sent to each of Clean Hub's services, as data
 
   function info(a) {
     return { id: a.id, name: a.name, iconPath: a.iconPath || '', show: a.show !== false, version: '1.0.0' };
@@ -68,6 +69,7 @@
   window.__mock = {
     launches: launches,
     appControls: [], // what the page asked the Fire TV service, as { id, data }
+    fireTvSaw: [], // the app controls the Fire TV service got, as data, each time (see launchAppControl)
     home: [], // commands the page sent the Home watcher, in order
     fireKeys: [], // keys the page passed to the Fire TV service, in order
     tvWindow: null, // the TV picture the page shows, as { rect, type, z }
@@ -150,10 +152,13 @@
     },
     application: {
       // Clean Hub's services get commands and keys this way; they're noted as
-      // sent (the TV delivers them a moment later).
+      // sent (the TV delivers them a moment later). As on the TV, a service
+      // reads the newest app control when one arrives: one sent before an
+      // older one was delivered takes its place, and is read twice.
       launchAppControl: function (control, id, ok, fail) {
         var data = {};
         control.data.forEach(function (d) { data[d.key] = d.value; });
+        newest[id] = data;
         if (id === 'CleanHub01.Home') told(data.cmd[0]);
         else if (id === 'CleanHub01.FireTv' && data.key && params.get('fireTvFail') !== '1') {
           window.__mock.fireKeys.push(JSON.parse(data.key[0]).name);
@@ -166,6 +171,7 @@
           if (id !== 'CleanHub01.Home' && !data.key) {
             window.__mock.appControls.push({ id: id, operation: control.operation, data: data });
           }
+          if (id === 'CleanHub01.FireTv') window.__mock.fireTvSaw.push(newest[id]);
           ok();
         }, 10);
       },

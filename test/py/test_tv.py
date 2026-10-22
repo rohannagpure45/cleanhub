@@ -1,6 +1,7 @@
 """Offline tests for scripts/tv.py (no TV, no SDK needed)."""
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 import textwrap
@@ -281,3 +282,169 @@ class FireTvTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self.pair((400, {"description": "Invalid pin"}), pin="0000")
         self.assertEqual(self.saved(), {})
+
+
+class FireTvShortcutTest(unittest.TestCase):
+    """`tv.py firetv record|run`: a shortcut is an app plus the keys pressed in it."""
+
+    STEPS = [{"key": "down", "wait": 4000}, {"key": "ok", "wait": 1200}, {"key": "down", "wait": 100},
+             {"key": "ok", "wait": 900}]
+    APPS = [{"name": "StbEmu", "package": "com.mvas.stb.emu.pro"}]
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.app = self.tmp / "dist-app"
+        (self.app / "service").mkdir(parents=True)
+        (self.app / "js").mkdir()
+        self.said = []
+        for p in [mock.patch.object(tv, "STATE", self.tmp / "state"),
+                  mock.patch.object(tv, "say", lambda *a: self.said.append(" ".join(map(str, a))))]:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def args(self, **kw):
+        return type("A", (), dict({"firetv": None, "icon": None}, **kw))()
+
+    def basketball(self, **extra):
+        return dict({"name": "Basketball", "package": "com.mvas.stb.emu.pro", "steps": self.STEPS,
+                     "icon": "basketball"}, **extra)
+
+    def test_a_paired_build_puts_shortcuts_after_the_apps(self):
+        shown = tv.write_firetv(self.app, {"host": "h", "token": "t", "apps": self.APPS,
+                                           "shortcuts": [self.basketball(), self.basketball(name="News", icon=None)]})
+        self.assertEqual([a["name"] for a in shown], ["StbEmu", "Basketball", "News"])
+        text = (self.app / "js" / "firetv-apps.js").read_text()
+        listed = json.loads(text.split("CH.fireTvApps = ", 1)[1].rsplit(";\n})", 1)[0])
+        self.assertEqual(listed, [self.APPS[0], self.basketball(),
+                                  {"name": "News", "package": "com.mvas.stb.emu.pro", "steps": self.STEPS}])
+
+    def test_a_shortcut_alone_still_brings_the_pairing(self):
+        tv.write_firetv(self.app, {"host": "h", "token": "t", "shortcuts": [self.basketball()]})
+        self.assertTrue((self.app / "service" / "config.json").exists())
+        tv.write_firetv(self.app, {"shortcuts": [self.basketball()]})
+        self.assertFalse((self.app / "service" / "config.json").exists(), "unpaired: no shortcuts either")
+
+    def test_recording_keeps_the_keys_and_the_pauses_between_them(self):
+        typed = iter(["\x1b[B", "x", "\r", "\x1b[B", "\x7f", " ", "s"])
+        clock = iter([4.0, 5.2, 5.3, 6.2, 9.0])
+        sent = []
+        steps = tv.record_steps(lambda: next(typed), lambda k: sent.append(k) or True, lambda: next(clock), 0.0)
+        self.assertEqual(sent, ["down", "ok", "down", "back", "play"], "keys go to the stick as they're pressed")
+        self.assertEqual(steps, [{"key": "down", "wait": 4000}, {"key": "ok", "wait": 1200},
+                                 {"key": "down", "wait": 100}, {"key": "back", "wait": 900},
+                                 {"key": "play", "wait": 2800}])
+
+    def test_a_key_the_stick_missed_isnt_recorded_and_its_pause_carries_on(self):
+        typed = iter(["\x1bOB", "\r", "\r", "S"])
+        clock = iter([1.0, 2.0, 2.5])
+        answers = iter([True, False, True])
+        steps = tv.record_steps(lambda: next(typed), lambda k: next(answers), lambda: next(clock), 0.0)
+        self.assertEqual(steps, [{"key": "down", "wait": 1000}, {"key": "ok", "wait": 1500}])
+
+    def test_quitting_a_recording_keeps_nothing(self):
+        for quit_key in ("q", "\x1b", "\x03", ""):
+            typed = iter(["\r", quit_key])
+            self.assertIsNone(tv.record_steps(lambda: next(typed), lambda k: True, lambda: 1.0, 0.0))
+
+    def test_a_long_pause_is_capped_and_a_recording_has_a_limit(self):
+        typed = iter(["\r"] * 100)
+        clock = iter(range(0, 4000, 40))
+        steps = tv.record_steps(lambda: next(typed), lambda k: True, lambda: next(clock), 0.0)
+        self.assertEqual(len(steps), tv.STEPS_MAX)
+        self.assertEqual(steps[1]["wait"], tv.STEP_WAIT_MAX)
+
+    def test_the_icon_comes_from_the_name_unless_chosen(self):
+        self.assertEqual(tv.shortcut_icon("NBA Basketball", None), "basketball")
+        self.assertEqual(tv.shortcut_icon("Premier League", None), None)
+        self.assertEqual(tv.shortcut_icon("Premier League", "soccer"), "soccer")
+        self.assertEqual(tv.shortcut_icon("Basketball", "none"), None)
+        with self.assertRaises(SystemExit):
+            tv.shortcut_icon("X", "cricket")
+
+    def test_the_app_is_a_home_app_by_name_or_a_package(self):
+        config = {"apps": self.APPS}
+        self.assertEqual(tv.shortcut_app("stbemu", config), "com.mvas.stb.emu.pro")
+        self.assertEqual(tv.shortcut_app("org.xbmc.kodi", config), "org.xbmc.kodi")
+        with self.assertRaises(SystemExit):
+            tv.shortcut_app("Kodi", config)
+
+    def record(self, typed, config):
+        typed = iter(typed)
+        with mock.patch.object(tv, "firetv_start", lambda args, config, package: "192.168.1.88"), \
+                mock.patch.object(tv, "firetv_key", lambda host, token, name: True), \
+                mock.patch.object(tv, "read_terminal_key", lambda fd: next(typed)), \
+                mock.patch.object(tv.sys.stdin, "isatty", lambda: True, create=True), \
+                mock.patch.object(tv.sys.stdin, "fileno", lambda: 0, create=True), \
+                mock.patch.object(tv.termios, "tcgetattr", lambda fd: []), \
+                mock.patch.object(tv.termios, "tcsetattr", lambda fd, when, attrs: None), \
+                mock.patch.object(tv.tty, "setcbreak", lambda fd: None):
+            tv.firetv_record(self.args(name="Basketball", app="StbEmu"), config)
+
+    def test_record_saves_the_shortcut_replacing_one_of_the_same_name(self):
+        config = {"host": "192.168.1.88", "token": "t", "apps": self.APPS,
+                  "shortcuts": [self.basketball(steps=[{"key": "ok", "wait": 1}])]}
+        self.record(["\x1b[B", "\r", "s"], config)
+        saved = tv.load_json(tv.FIRETV_JSON)
+        self.assertEqual(len(saved["shortcuts"]), 1)
+        shortcut = saved["shortcuts"][0]
+        self.assertEqual((shortcut["name"], shortcut["package"], shortcut["icon"]),
+                         ("Basketball", "com.mvas.stb.emu.pro", "basketball"))
+        self.assertEqual([s["key"] for s in shortcut["steps"]], ["down", "ok"])
+        self.assertEqual((self.tmp / "state" / tv.FIRETV_JSON).stat().st_mode & 0o777, 0o600)
+
+    def test_record_then_quit_saves_nothing(self):
+        self.record(["\r", "q"], {"host": "h", "token": "t", "apps": self.APPS})
+        self.assertEqual(tv.load_json(tv.FIRETV_JSON), {})
+
+    def test_run_plays_the_keys_with_the_tvs_timing(self):
+        slept, pressed = [], []
+        config = {"host": "h", "token": "t", "apps": self.APPS, "shortcuts": [self.basketball()]}
+        with mock.patch.object(tv, "firetv_start", lambda args, config, package: "192.168.1.88"), \
+                mock.patch.object(tv, "firetv_key", lambda host, token, name: pressed.append(name) or True), \
+                mock.patch.object(tv.time, "sleep", slept.append):
+            tv.firetv_run(self.args(name="basketball"), config)
+        self.assertEqual(pressed, ["down", "ok", "down", "ok"])
+        self.assertEqual(slept, [5.5, 1.2, 0.3, 0.9])
+
+    def test_run_stops_where_the_stick_stops_answering(self):
+        config = {"host": "h", "token": "t", "shortcuts": [self.basketball()]}
+        answers = iter([True, False])
+        with mock.patch.object(tv, "firetv_start", lambda args, config, package: "h"), \
+                mock.patch.object(tv, "firetv_key", lambda host, token, name: next(answers)), \
+                mock.patch.object(tv.time, "sleep", lambda s: None):
+            with self.assertRaises(SystemExit):
+                tv.firetv_run(self.args(name="Basketball"), config)
+
+    def test_a_key_that_gets_no_answer_wakes_the_stick_once(self):
+        answers = iter([OSError("timed out"), (200, "OK")])
+
+        def api(host, path, body=None, token=None, timeout=10, method="POST"):
+            a = next(answers)
+            if isinstance(a, Exception):
+                raise a
+            return a
+
+        woke = []
+        with mock.patch.object(tv, "firetv_api", api), \
+                mock.patch.object(tv, "firetv_wake", lambda host, wait=15: woke.append(host) or True):
+            self.assertTrue(tv.firetv_key("h", "t", "ok"))
+        self.assertEqual(woke, ["h"])
+        with mock.patch.object(tv, "firetv_api", lambda *a, **k: (403, "no")):
+            with self.assertRaises(SystemExit):
+                tv.firetv_key("h", "t", "ok")
+
+    def test_list_and_remove_know_shortcuts(self):
+        config = {"token": "t", "host": "h", "apps": self.APPS, "shortcuts": [self.basketball()]}
+        tv.firetv_list(self.args(), config)
+        self.assertIn("  Basketball (shortcut in StbEmu): ↓ OK ↓ OK (4 presses, about 8 s)", self.said)
+        tv.firetv_remove(self.args(name="Basketball"), config)
+        saved = tv.load_json(tv.FIRETV_JSON)
+        self.assertEqual((saved["apps"], saved["shortcuts"]), (self.APPS, []))
+
+    def test_the_mac_and_the_tv_play_shortcuts_by_the_same_rules(self):
+        js = (ROOT / "app" / "service" / "firetv.js").read_text()
+        for name in ("STEPS_MAX", "STEP_WAIT_MAX", "STEP_MIN_MS", "FIRST_EXTRA_MS"):
+            self.assertEqual(int(re.search(rf"const {name} = (\d+);", js).group(1)), getattr(tv, name), name)
+        js_keys = dict(re.findall(r"^  (\w+): '(/v1/[^']+)'", js, re.M))
+        self.assertEqual({k: v for k, v in js_keys.items() if k != "home"}, tv.FIRETV_KEY_PATHS)
+        self.assertEqual(set(tv.TERMINAL_KEYS.values()), set(tv.FIRETV_KEY_PATHS))
